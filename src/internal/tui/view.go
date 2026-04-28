@@ -17,6 +17,9 @@ func (m Model) View() string {
 	if m.mode == ModeConfirmDelete {
 		return m.renderDeleteModal()
 	}
+	if m.mode == ModePickStatus || m.mode == ModePickPriority {
+		return m.renderPicker()
+	}
 	return m.renderMain()
 }
 

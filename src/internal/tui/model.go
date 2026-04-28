@@ -32,6 +32,13 @@ const (
 	ModeAdding
 	ModeSearching
 	ModeConfirmDelete
+	ModePickStatus
+	ModePickPriority
+)
+
+var (
+	pickerStatuses   = []task.Status{task.StatusTodo, task.StatusInProgress, task.StatusWaiting, task.StatusSomeday, task.StatusDone}
+	pickerPriorities = []task.Priority{task.PriorityCritical, task.PriorityHigh, task.PriorityMedium, task.PriorityLow}
 )
 
 const statsBanner = ` ██████╗ ██╗     ██╗███████╗ ████████╗
@@ -59,6 +66,7 @@ type Model struct {
 	status       string
 	showHelp     bool
 	stats        []storage.DayStat
+	pickerIdx    int   // selected row index in the status/priority picker
 	err          error // last storage error, shown in status bar when non-nil
 }
 

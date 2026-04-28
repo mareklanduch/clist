@@ -29,6 +29,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateSearching(msg)
 		case ModeConfirmDelete:
 			return m.updateConfirmDelete(msg)
+		case ModePickStatus:
+			return m.updatePickStatus(msg)
+		case ModePickPriority:
+			return m.updatePickPriority(msg)
 		}
 	}
 	return m, nil
@@ -131,20 +135,24 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "p":
 		if len(m.filtered) > 0 && m.selected < len(m.filtered) {
 			t := m.filtered[m.selected]
-			if err := storage.UpdatePriority(m.db, t.ID, task.NextPriority(t.Priority)); err != nil {
-				m.status = fmt.Sprintf("Error: %v", err)
-			} else {
-				m.reload()
+			for i, p := range pickerPriorities {
+				if p == t.Priority {
+					m.pickerIdx = i
+					break
+				}
 			}
+			m.mode = ModePickPriority
 		}
 	case "s":
 		if len(m.filtered) > 0 && m.selected < len(m.filtered) {
 			t := m.filtered[m.selected]
-			if err := storage.UpdateStatus(m.db, t.ID, task.NextStatus(t.Status)); err != nil {
-				m.status = fmt.Sprintf("Error: %v", err)
-			} else {
-				m.reload()
+			for i, s := range pickerStatuses {
+				if s == t.Status {
+					m.pickerIdx = i
+					break
+				}
 			}
+			m.mode = ModePickStatus
 		}
 	case "/":
 		m.mode = ModeSearching
@@ -228,6 +236,80 @@ func (m Model) updateConfirmDelete(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "n", "esc":
 		m.mode = ModeNormal
 	}
+	return m, nil
+}
+
+func (m Model) updatePickStatus(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "j", "down":
+		if m.pickerIdx < len(pickerStatuses)-1 {
+			m.pickerIdx++
+		}
+	case "k", "up":
+		if m.pickerIdx > 0 {
+			m.pickerIdx--
+		}
+	case "1", "2", "3", "4", "5":
+		idx := int(msg.String()[0] - '1')
+		if idx < len(pickerStatuses) {
+			m.pickerIdx = idx
+			return m.applyPickStatus()
+		}
+	case "enter":
+		return m.applyPickStatus()
+	case "esc", "q":
+		m.mode = ModeNormal
+	}
+	return m, nil
+}
+
+func (m Model) applyPickStatus() (tea.Model, tea.Cmd) {
+	if len(m.filtered) > 0 && m.selected < len(m.filtered) {
+		t := m.filtered[m.selected]
+		if err := storage.UpdateStatus(m.db, t.ID, pickerStatuses[m.pickerIdx]); err != nil {
+			m.status = fmt.Sprintf("Error: %v", err)
+		} else {
+			m.reload()
+		}
+	}
+	m.mode = ModeNormal
+	return m, nil
+}
+
+func (m Model) updatePickPriority(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "j", "down":
+		if m.pickerIdx < len(pickerPriorities)-1 {
+			m.pickerIdx++
+		}
+	case "k", "up":
+		if m.pickerIdx > 0 {
+			m.pickerIdx--
+		}
+	case "1", "2", "3", "4":
+		idx := int(msg.String()[0] - '1')
+		if idx < len(pickerPriorities) {
+			m.pickerIdx = idx
+			return m.applyPickPriority()
+		}
+	case "enter":
+		return m.applyPickPriority()
+	case "esc", "q":
+		m.mode = ModeNormal
+	}
+	return m, nil
+}
+
+func (m Model) applyPickPriority() (tea.Model, tea.Cmd) {
+	if len(m.filtered) > 0 && m.selected < len(m.filtered) {
+		t := m.filtered[m.selected]
+		if err := storage.UpdatePriority(m.db, t.ID, pickerPriorities[m.pickerIdx]); err != nil {
+			m.status = fmt.Sprintf("Error: %v", err)
+		} else {
+			m.reload()
+		}
+	}
+	m.mode = ModeNormal
 	return m, nil
 }
 
