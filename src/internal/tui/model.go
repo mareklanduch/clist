@@ -10,6 +10,7 @@ import (
 
 	"clist/internal/storage"
 	"clist/internal/task"
+	"clist/internal/vault"
 )
 
 // AppView identifies the active tab.
@@ -34,6 +35,9 @@ const (
 	ModeConfirmDelete
 	ModePickStatus
 	ModePickPriority
+	ModePickVault
+	ModeVaultAdd
+	ModeVaultConfirmRemove
 )
 
 var (
@@ -51,6 +55,8 @@ const statsBanner = ` ██████╗ ██╗     ██╗████�
 // Model is the bubbletea application state.
 type Model struct {
 	db           *sql.DB
+	vault        *vault.Config
+	dataDir      string
 	width        int
 	height       int
 	view         AppView
@@ -70,18 +76,18 @@ type Model struct {
 	err          error // last storage error, shown in status bar when non-nil
 }
 
-// New constructs a Model bound to the given DB.
-func New(db *sql.DB) Model {
+// New constructs a Model bound to the given DB and vault config.
+func New(db *sql.DB, vc *vault.Config, dataDir string) Model {
 	ti := textinput.New()
 	ti.CharLimit = 256
-	m := Model{db: db, input: ti}
+	m := Model{db: db, vault: vc, dataDir: dataDir, input: ti}
 	m.reload()
 	return m
 }
 
 // Run launches the bubbletea program.
-func Run(db *sql.DB) error {
-	p := tea.NewProgram(New(db), tea.WithAltScreen(), tea.WithMouseCellMotion())
+func Run(db *sql.DB, vc *vault.Config, dataDir string) error {
+	p := tea.NewProgram(New(db, vc, dataDir), tea.WithAltScreen(), tea.WithMouseCellMotion())
 	_, err := p.Run()
 	return err
 }

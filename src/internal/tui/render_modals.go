@@ -57,6 +57,9 @@ func (m Model) renderHelp() string {
 	all = append(all, "  "+dim.Render("DATE: YYYY-MM-DD | today | 1d | -1d | 1m | -1m"))
 	all = append(all, "  "+dim.Render("priority: !critical  !high  !medium  !low"))
 	all = append(all, "")
+	all = append(all, title.Render("Vault"))
+	all = append(all, "  "+k.Render("v")+"              "+d.Render("Open vault manager (switch/add/remove)"))
+	all = append(all, "")
 	all = append(all, title.Render("Other"))
 	all = append(all, "  "+k.Render("h / ?")+"          "+d.Render("Toggle this help  (any key closes)"))
 	all = append(all, "  "+k.Render("q")+"              "+d.Render("Quit"))
@@ -102,6 +105,62 @@ func (m Model) renderHelp() string {
 		Border(lipgloss.RoundedBorder()).BorderForeground(colCyan).
 		Padding(1, 2).Width(modalW).Height(boxH-2).
 		Render(header + strings.Join(parts, "\n"))
+
+	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, modal)
+}
+
+func (m Model) renderVaultPicker() string {
+	vaults := m.vault.Vaults
+	dim := lipgloss.NewStyle().Foreground(colGray)
+
+	var rows []string
+	for i, v := range vaults {
+		marker := "  "
+		if v.Name == m.vault.Active {
+			marker = "● "
+		}
+		row := fmt.Sprintf("  %s%-18s", marker, v.Name)
+		switch {
+		case i == m.pickerIdx:
+			rows = append(rows, lipgloss.NewStyle().Background(colBlue).Foreground(colWhite).Bold(true).Render(row+" ◀"))
+		case v.Name == m.vault.Active:
+			rows = append(rows, lipgloss.NewStyle().Foreground(colCyan).Render(row))
+		default:
+			rows = append(rows, lipgloss.NewStyle().Foreground(colWhite).Render(row))
+		}
+	}
+
+	var bottom string
+	switch m.mode {
+	case ModeVaultAdd:
+		prompt := lipgloss.NewStyle().Foreground(colCyan).Render("  New vault name:")
+		inputBox := lipgloss.NewStyle().
+			Border(lipgloss.NormalBorder()).BorderForeground(colCyan).
+			Width(24).Render(m.input.View())
+		hint := dim.Render("  Enter: create  ·  Esc: cancel")
+		bottom = "\n" + prompt + "\n" + inputBox + "\n" + hint
+
+	case ModeVaultConfirmRemove:
+		name := ""
+		if m.pickerIdx < len(vaults) {
+			name = vaults[m.pickerIdx].Name
+		}
+		warn := lipgloss.NewStyle().Foreground(colRed).Bold(true).Render(fmt.Sprintf("  Remove %q?", name))
+		hint := dim.Render("  y/Enter: yes  ·  n/Esc: cancel")
+		bottom = "\n" + warn + "\n" + hint
+
+	default:
+		hint := dim.Render("  Enter/s: switch  ·  a: add  ·  d: remove  ·  Esc: close")
+		bottom = "\n" + hint
+	}
+
+	titleLine := lipgloss.NewStyle().Foreground(colCyan).Bold(true).Render("Vaults")
+	content := "\n" + strings.Join(rows, "\n") + "\n" + bottom
+
+	modal := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).BorderForeground(colCyan).
+		Padding(0, 2).
+		Render(titleLine + content)
 
 	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, modal)
 }

@@ -5,6 +5,7 @@
 //	clist add Buy milk !high
 //	clist a Buy milk       # alias for `add`
 //	clist list             # list pending tasks
+//	clist vault list       # list all vaults
 //	clist help             # show every command
 package main
 
@@ -15,10 +16,26 @@ import (
 	"clist/internal/commands"
 	"clist/internal/storage"
 	"clist/internal/tui"
+	"clist/internal/vault"
 )
 
 func main() {
-	db, err := storage.Open()
+	dataDir, err := vault.DataDir()
+	if err != nil {
+		cli.ExitOnError(err)
+	}
+
+	vc, err := vault.Load(dataDir)
+	if err != nil {
+		cli.ExitOnError(err)
+	}
+
+	av := vc.ActiveVault()
+	if av == nil {
+		cli.ExitOnError(err)
+	}
+
+	db, err := storage.OpenAt(av.Path)
 	if err != nil {
 		cli.ExitOnError(err)
 	}
@@ -28,15 +45,15 @@ func main() {
 	registry.RegisterAll(commands.All())
 
 	ctx := &cli.Context{
-		DB:     db,
-		Stdout: os.Stdout,
-		Stderr: os.Stderr,
+		DB:      db,
+		Vault:   vc,
+		DataDir: dataDir,
+		Stdout:  os.Stdout,
+		Stderr:  os.Stderr,
 	}
 
-	// No args (or unknown command) → drop into the TUI. This preserves
-	// the "just type `clist`" experience while keeping subcommands fast.
 	defaultRun := func(_ *cli.Context, _ []string) error {
-		return tui.Run(db)
+		return tui.Run(db, vc, dataDir)
 	}
 
 	if err := registry.Dispatch(ctx, os.Args[1:], defaultRun); err != nil {

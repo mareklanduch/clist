@@ -9,6 +9,7 @@ import (
 
 	"clist/internal/storage"
 	"clist/internal/task"
+	"clist/internal/vault"
 )
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -33,6 +34,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updatePickStatus(msg)
 		case ModePickPriority:
 			return m.updatePickPriority(msg)
+		case ModePickVault:
+			return m.updatePickVault(msg)
+		case ModeVaultAdd:
+			return m.updateVaultAdd(msg)
+		case ModeVaultConfirmRemove:
+			return m.updateVaultConfirmRemove(msg)
 		}
 	}
 	return m, nil
@@ -90,7 +97,7 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case "a":
 		m.mode = ModeAdding
-		m.input.Placeholder = "Buy milk #groceries !high due:today  due:1d  due:2m"
+		m.input.Placeholder = "Buy milk #groceries !high due:today @work"
 		m.input.SetValue("")
 		m.input.Focus()
 	case "e":
@@ -159,6 +166,11 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.input.Placeholder = "Search tasks..."
 		m.input.SetValue("")
 		m.input.Focus()
+	case "v":
+		if m.vault != nil {
+			m.openVaultPicker()
+			m.mode = ModePickVault
+		}
 	}
 	return m, nil
 }
@@ -168,7 +180,7 @@ func (m Model) updateAdding(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "enter":
 		val := strings.TrimSpace(m.input.Value())
 		if val != "" {
-			title, tags, priority, dueDate := task.ParseInput(val)
+			title, tags, priority, dueDate, vaultName := task.ParseInput(val)
 			if title != "" {
 				t := task.Task{
 					Title:     title,
@@ -177,11 +189,35 @@ func (m Model) updateAdding(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					DueDate:   dueDate,
 					CreatedAt: time.Now(),
 				}
-				if err := storage.AddTask(m.db, t); err != nil {
+				db := m.db
+				targetVault := m.vault.Active
+				openedAlt := false
+				if vaultName != "" {
+					if v := m.vault.Get(vaultName); v != nil {
+						if vaultName != m.vault.Active {
+							if altDB, err := storage.OpenAt(v.Path); err == nil {
+								db = altDB
+								openedAlt = true
+							}
+						}
+						targetVault = vaultName
+					} else {
+						m.status = fmt.Sprintf("Error: vault %q not found", vaultName)
+						m.mode = ModeNormal
+						m.input.Blur()
+						return m, nil
+					}
+				}
+				if err := storage.AddTask(db, t); err != nil {
 					m.status = fmt.Sprintf("Error: %v", err)
+				} else if targetVault != m.vault.Active {
+					m.status = fmt.Sprintf("Added to [%s]: %s", targetVault, title)
 				} else {
 					m.status = "Added: " + title
 					m.reload()
+				}
+				if openedAlt {
+					_ = db.Close()
 				}
 			}
 		}
@@ -312,6 +348,152 @@ func (m Model) applyPickPriority() (tea.Model, tea.Cmd) {
 	m.mode = ModeNormal
 	return m, nil
 }
+
+// openVaultPicker positions pickerIdx on the active vault.
+func (m *Model) openVaultPicker() {
+	for i, v := range m.vault.Vaults {
+		if v.Name == m.vault.Active {
+			m.pickerIdx = i
+			return
+		}
+	}
+	m.pickerIdx = 0
+}
+
+func (m Model) updatePickVault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	vaults := m.vault.Vaults
+	switch msg.String() {
+	case "j", "down":
+		if m.pickerIdx < len(vaults)-1 {
+			m.pickerIdx++
+		}
+	case "k", "up":
+		if m.pickerIdx > 0 {
+			m.pickerIdx--
+		}
+	case "enter", "s":
+		return m.applyPickVault()
+	case "a":
+		m.input.Placeholder = "work, personal, …"
+		m.input.SetValue("")
+		m.input.Focus()
+		m.mode = ModeVaultAdd
+	case "d":
+		if len(vaults) > 0 {
+			m.mode = ModeVaultConfirmRemove
+		}
+	case "esc", "q":
+		m.mode = ModeNormal
+	}
+	return m, nil
+}
+
+func (m Model) applyPickVault() (tea.Model, tea.Cmd) {
+	vaults := m.vault.Vaults
+	if m.pickerIdx >= len(vaults) {
+		m.mode = ModeNormal
+		return m, nil
+	}
+	chosen := vaults[m.pickerIdx]
+	if chosen.Name == m.vault.Active {
+		m.mode = ModeNormal
+		return m, nil
+	}
+
+	newDB, err := storage.OpenAt(chosen.Path)
+	if err != nil {
+		m.status = fmt.Sprintf("Error opening vault: %v", err)
+		m.mode = ModeNormal
+		return m, nil
+	}
+
+	if err := m.vault.Switch(chosen.Name); err != nil {
+		_ = newDB.Close()
+		m.status = fmt.Sprintf("Error switching vault: %v", err)
+		m.mode = ModeNormal
+		return m, nil
+	}
+
+	_ = m.db.Close()
+	m.db = newDB
+	m.status = fmt.Sprintf("Switched to vault %q", chosen.Name)
+	m.selected = 0
+	m.scrollOffset = 0
+	m.search = ""
+	m.reload()
+	m.mode = ModeNormal
+	return m, nil
+}
+
+func (m Model) updateVaultAdd(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "enter":
+		name := strings.TrimSpace(m.input.Value())
+		m.input.Blur()
+		if name != "" {
+			if err := m.vault.Add(name); err != nil {
+				m.status = fmt.Sprintf("Error: %v", err)
+			} else {
+				m.status = fmt.Sprintf("Vault %q created", name)
+				// position picker on the new vault
+				for i, v := range m.vault.Vaults {
+					if v.Name == strings.ToLower(name) {
+						m.pickerIdx = i
+						break
+					}
+				}
+			}
+		}
+		m.mode = ModePickVault
+	case "esc":
+		m.input.Blur()
+		m.mode = ModePickVault
+	default:
+		var cmd tea.Cmd
+		m.input, cmd = m.input.Update(msg)
+		return m, cmd
+	}
+	return m, nil
+}
+
+func (m Model) updateVaultConfirmRemove(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "y", "enter":
+		vaults := m.vault.Vaults
+		if m.pickerIdx < len(vaults) {
+			name := vaults[m.pickerIdx].Name
+			activeChanged, err := m.vault.Remove(name)
+			if err != nil {
+				m.status = fmt.Sprintf("Error: %v", err)
+			} else {
+				m.status = fmt.Sprintf("Vault %q removed", name)
+				if activeChanged {
+					newDB, err := storage.OpenAt(m.vault.ActiveVault().Path)
+					if err != nil {
+						m.status = fmt.Sprintf("Error opening vault: %v", err)
+					} else {
+						_ = m.db.Close()
+						m.db = newDB
+						m.selected = 0
+						m.scrollOffset = 0
+						m.search = ""
+						m.reload()
+					}
+				}
+				if m.pickerIdx >= len(m.vault.Vaults) {
+					m.pickerIdx = len(m.vault.Vaults) - 1
+				}
+			}
+		}
+		m.mode = ModePickVault
+	case "n", "esc":
+		m.mode = ModePickVault
+	}
+	return m, nil
+}
+
+// ensure vault package is used
+var _ = vault.Config{}
 
 func (m Model) updateHelp(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {

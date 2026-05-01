@@ -21,6 +21,7 @@ func All() []*cli.Command {
 		doneCmd,
 		deleteCmd,
 		statsCmd,
+		vaultCmd,
 		helpCmd,
 	}
 }

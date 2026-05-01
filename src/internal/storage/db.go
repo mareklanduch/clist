@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"time"
 
@@ -24,45 +23,12 @@ type DayStat struct {
 	Count int
 }
 
-// dbPath returns the path to the SQLite database file.
-func dbPath() (string, error) {
-	dir, err := dataDir()
-	if err != nil {
-		return "", err
-	}
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", fmt.Errorf("failed to create db directory %s: %w", dir, err)
-	}
-	return filepath.Join(dir, "clist.db"), nil
-}
-
-func dataDir() (string, error) {
-	if runtime.GOOS == "windows" {
-		appdata := os.Getenv("APPDATA")
-		if appdata == "" {
-			profile := os.Getenv("USERPROFILE")
-			if profile == "" {
-				return "", fmt.Errorf("could not determine APPDATA directory")
-			}
-			appdata = filepath.Join(profile, "AppData", "Roaming")
-		}
-		return filepath.Join(appdata, AppDir), nil
-	}
-	home := os.Getenv("HOME")
-	if home == "" {
-		home = os.Getenv("USERPROFILE")
-	}
-	if home == "" {
-		return "", fmt.Errorf("could not determine home directory (set HOME or USERPROFILE)")
-	}
-	return filepath.Join(home, ".local", "share", AppDir), nil
-}
-
-// Open opens (or creates) the SQLite database and ensures the schema exists.
-func Open() (*sql.DB, error) {
-	path, err := dbPath()
-	if err != nil {
-		return nil, err
+// OpenAt opens (or creates) a SQLite database at an explicit path and ensures
+// the schema exists. This is the preferred entry-point; use it with the path
+// from vault.Config.ActiveVault().Path.
+func OpenAt(path string) (*sql.DB, error) {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return nil, fmt.Errorf("failed to create db directory: %w", err)
 	}
 
 	db, err := sql.Open("sqlite", path)

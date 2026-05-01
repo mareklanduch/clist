@@ -14,15 +14,19 @@ import (
 	"os"
 	"sort"
 	"strings"
+
+	"clist/internal/vault"
 )
 
 // Context is passed to every command's Run function. It bundles shared
 // dependencies (DB handle, output streams) so commands stay decoupled
 // from globals and easy to test.
 type Context struct {
-	DB     *sql.DB
-	Stdout io.Writer
-	Stderr io.Writer
+	DB      *sql.DB
+	Vault   *vault.Config
+	DataDir string
+	Stdout  io.Writer
+	Stderr  io.Writer
 	// Registry is set by Dispatch so commands like `help` can introspect.
 	Registry *Registry
 }
@@ -145,18 +149,18 @@ func UsageErrorf(ctx *Context, c *Command, format string, a ...any) error {
 	if c.Usage != "" {
 		fmt.Fprintf(ctx.Stderr, "usage: %s\n", c.Usage)
 	}
-	return errSilent
+	return ErrSilent
 }
 
-// errSilent signals that an error has already been printed and main()
+// ErrSilent signals that an error has already been printed and main()
 // should exit non-zero without re-printing.
-var errSilent = silentError{}
+var ErrSilent = silentError{}
 
 type silentError struct{}
 
 func (silentError) Error() string { return "" }
 
-// IsSilent reports whether err was produced via Command.Errorf and
+// IsSilent reports whether err was produced via UsageErrorf and
 // already printed.
 func IsSilent(err error) bool {
 	_, ok := err.(silentError)

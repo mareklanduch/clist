@@ -265,8 +265,10 @@ func PrioritySortOrder(p Priority) int {
 
 // ParseInput parses GTD-style task input:
 //
-//	"Buy milk #groceries !high due:today"
-func ParseInput(s string) (title string, tags []string, priority Priority, dueDate *time.Time) {
+//	"Buy milk #groceries !high due:today @work"
+//
+// vaultName is empty when no @vault token is present.
+func ParseInput(s string) (title string, tags []string, priority Priority, dueDate *time.Time, vaultName string) {
 	priority = PriorityMedium
 	var titleParts []string
 
@@ -276,8 +278,10 @@ func ParseInput(s string) (title string, tags []string, priority Priority, dueDa
 			tags = append(tags, token[1:])
 		case strings.HasPrefix(token, "!") && len(token) > 1:
 			priority = PriorityFromStr(token[1:])
-		case strings.HasPrefix(token, "due:"):
+		case strings.HasPrefix(token, "due:") && len(token) > 4:
 			dueDate = parseDueDate(token[4:])
+		case strings.HasPrefix(token, "@") && len(token) > 1:
+			vaultName = strings.ToLower(token[1:])
 		default:
 			titleParts = append(titleParts, token)
 		}

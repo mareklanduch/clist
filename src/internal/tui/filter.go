@@ -3,7 +3,6 @@ package tui
 import (
 	"sort"
 	"strings"
-	"time"
 
 	"clist/internal/storage"
 	"clist/internal/task"
@@ -29,18 +28,13 @@ func (m *Model) reload() {
 // computeCounts tallies view badge counts in a single pass over all tasks.
 // Called only from reload(), so the O(n) scan happens once per data refresh.
 func (m *Model) computeCounts() [5]int {
-	now := time.Now()
-	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	var counts [5]int
 	for _, t := range m.tasks {
 		if !t.Archived && t.Status != task.StatusDone {
 			counts[0]++ // All
 		}
-		if !t.Archived && t.Status != task.StatusDone {
-			createdDate := time.Date(t.CreatedAt.Year(), t.CreatedAt.Month(), t.CreatedAt.Day(), 0, 0, 0, 0, t.CreatedAt.Location())
-			if t.IsDueToday() || createdDate.Equal(today) {
-				counts[1]++ // Today
-			}
+		if !t.Archived && t.IsDueToday() {
+			counts[1]++ // Today
 		}
 		if !t.Archived && t.Status == task.StatusWaiting {
 			counts[2]++ // Waiting
@@ -56,9 +50,6 @@ func (m *Model) computeCounts() [5]int {
 }
 
 func (m *Model) applyFilter() {
-	now := time.Now()
-	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-
 	var result []task.Task
 	for _, t := range m.tasks {
 		switch m.view {
@@ -67,11 +58,7 @@ func (m *Model) applyFilter() {
 				continue
 			}
 		case ViewToday:
-			if t.Archived {
-				continue
-			}
-			createdDate := time.Date(t.CreatedAt.Year(), t.CreatedAt.Month(), t.CreatedAt.Day(), 0, 0, 0, 0, t.CreatedAt.Location())
-			if !t.IsDueToday() && !createdDate.Equal(today) {
+			if t.Archived || !t.IsDueToday() {
 				continue
 			}
 		case ViewWaiting:

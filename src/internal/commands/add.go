@@ -18,11 +18,13 @@ var addCmd = &cli.Command{
 	Long: `Add a new task using GTD syntax:
 
     clist add Buy milk #groceries !high due:today
+    clist add Fix bug !critical @work
 
 Modifiers:
-    #tag      add a tag (repeatable)
-    !priority one of: critical, high, medium, low
-    due:DATE  YYYY-MM-DD, today, 1d, -1d, 1m, 2m`,
+    #tag       add a tag (repeatable)
+    !priority  one of: critical, high, medium, low
+    due:DATE   YYYY-MM-DD, today, 1d, -1d, 1m, 2m
+    @vault     target vault (defaults to the active vault)`,
 }
 
 func init() { addCmd.Run = runAdd }
@@ -33,9 +35,28 @@ func runAdd(ctx *cli.Context, args []string) error {
 	}
 
 	text := strings.Join(args, " ")
-	title, tags, priority, dueDate := task.ParseInput(text)
+	title, tags, priority, dueDate, vaultName := task.ParseInput(text)
 	if title == "" {
 		return cli.UsageErrorf(ctx, addCmd, "task title is empty")
+	}
+
+	db := ctx.DB
+	targetVault := ctx.Vault.Active
+
+	if vaultName != "" {
+		v := ctx.Vault.Get(vaultName)
+		if v == nil {
+			return fmt.Errorf("vault %q not found (use `clist vault list` to see available vaults)", vaultName)
+		}
+		if vaultName != ctx.Vault.Active {
+			altDB, err := storage.OpenAt(v.Path)
+			if err != nil {
+				return fmt.Errorf("open vault %q: %w", vaultName, err)
+			}
+			defer altDB.Close()
+			db = altDB
+		}
+		targetVault = vaultName
 	}
 
 	t := task.Task{
@@ -45,9 +66,14 @@ func runAdd(ctx *cli.Context, args []string) error {
 		DueDate:   dueDate,
 		CreatedAt: time.Now(),
 	}
-	if err := storage.AddTask(ctx.DB, t); err != nil {
+	if err := storage.AddTask(db, t); err != nil {
 		return fmt.Errorf("add task: %w", err)
 	}
-	fmt.Fprintf(ctx.Stdout, "Added: %s\n", title)
+
+	if targetVault != ctx.Vault.Active {
+		fmt.Fprintf(ctx.Stdout, "Added to [%s]: %s\n", targetVault, title)
+	} else {
+		fmt.Fprintf(ctx.Stdout, "Added: %s\n", title)
+	}
 	return nil
 }

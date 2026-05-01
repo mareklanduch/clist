@@ -20,6 +20,9 @@ func (m Model) View() string {
 	if m.mode == ModePickStatus || m.mode == ModePickPriority {
 		return m.renderPicker()
 	}
+	if m.mode == ModePickVault || m.mode == ModeVaultAdd || m.mode == ModeVaultConfirmRemove {
+		return m.renderVaultPicker()
+	}
 	return m.renderMain()
 }
 
@@ -72,6 +75,12 @@ func (m Model) renderSidebar(w, h int) string {
 
 	var lines []string
 	lines = append(lines, lipgloss.NewStyle().Foreground(colCyan).Bold(true).Render("☑ CLIst"))
+
+	if m.vault != nil {
+		vaultName := m.vault.Active
+		vaultLine := lipgloss.NewStyle().Foreground(colGray).Render("◈ " + runesTruncate(vaultName, innerW-2))
+		lines = append(lines, vaultLine)
+	}
 	lines = append(lines, "")
 
 	for _, item := range items {
@@ -108,7 +117,7 @@ func (m Model) renderSidebar(w, h int) string {
 
 	innerH := h - 2
 	bodyLines := strings.Count(body, "\n") + 1
-	hint := lipgloss.NewStyle().Foreground(colGray).Render("h: help")
+	hint := lipgloss.NewStyle().Foreground(colGray).Render("h: help  v: vault")
 	padding := max(innerH-bodyLines, 0)
 	full := body + strings.Repeat("\n", padding) + hint
 
