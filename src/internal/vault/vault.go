@@ -14,11 +14,25 @@ import (
 
 func isWindows() bool { return runtime.GOOS == "windows" }
 
-// Vault represents a single named database.
+// VaultType distinguishes local SQLite vaults from remote clist-server vaults.
+type VaultType string
+
+const (
+	VaultTypeLocal  VaultType = "local"
+	VaultTypeRemote VaultType = "remote"
+)
+
+// Vault represents a single named task store.
+// Local vaults use Path (SQLite file); remote vaults use Token.
 type Vault struct {
-	Name string `json:"name"`
-	Path string `json:"path"`
+	Name  string    `json:"name"`
+	Path  string    `json:"path,omitempty"`
+	Type  VaultType `json:"type,omitempty"`
+	Token string    `json:"token,omitempty"`
 }
+
+// IsRemote reports whether the vault is stored on a remote clist-server.
+func (v *Vault) IsRemote() bool { return v.Type == VaultTypeRemote }
 
 // Config is the full vault registry, persisted to vaults.json.
 type Config struct {
@@ -140,7 +154,27 @@ func (c *Config) Get(name string) *Vault {
 	return nil
 }
 
-// Add creates a new vault. The db file will be created on first open.
+// AddRemoteVault registers a remote clist-server vault by name, server URL, and access token.
+func (c *Config) AddRemoteVault(name, token string) error {
+	name = canonicalize(name)
+	if name == "" {
+		return fmt.Errorf("vault name cannot be empty")
+	}
+	if !isValidName(name) {
+		return fmt.Errorf("vault name %q may only contain letters, digits, hyphens and underscores", name)
+	}
+	if c.Get(name) != nil {
+		return fmt.Errorf("vault %q already exists", name)
+	}
+	c.Vaults = append(c.Vaults, Vault{
+		Name:  name,
+		Type:  VaultTypeRemote,
+		Token: token,
+	})
+	return c.save()
+}
+
+// Add creates a new local vault. The db file will be created on first open.
 func (c *Config) Add(name string) error {
 	name = canonicalize(name)
 	if name == "" {

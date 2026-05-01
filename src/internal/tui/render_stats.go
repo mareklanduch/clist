@@ -26,12 +26,9 @@ func (m Model) renderStats(w, h int) string {
 
 	totalDone, overdue, totalActive := 0, 0, 0
 	for _, t := range m.tasks {
-		if t.Archived {
-			continue
-		}
 		if t.Status == task.StatusDone {
 			totalDone++
-		} else {
+		} else if !t.Archived {
 			totalActive++
 			if t.IsOverdue() {
 				overdue++

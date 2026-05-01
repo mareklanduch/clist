@@ -2,7 +2,6 @@
 package tui
 
 import (
-	"database/sql"
 	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -31,6 +30,7 @@ type InputMode int
 const (
 	ModeNormal InputMode = iota
 	ModeAdding
+	ModeEditing
 	ModeSearching
 	ModeConfirmDelete
 	ModePickStatus
@@ -38,6 +38,8 @@ const (
 	ModePickVault
 	ModeVaultAdd
 	ModeVaultConfirmRemove
+	ModeVaultRemoteToken // step 1: enter existing token (blank = generate new)
+	ModeVaultRemoteName  // step 2: enter vault name
 )
 
 var (
@@ -54,7 +56,7 @@ const statsBanner = ` ██████╗ ██╗     ██╗████�
 
 // Model is the bubbletea application state.
 type Model struct {
-	db           *sql.DB
+	backend      storage.Backend
 	vault        *vault.Config
 	dataDir      string
 	width        int
@@ -72,32 +74,39 @@ type Model struct {
 	status       string
 	showHelp     bool
 	stats        []storage.DayStat
-	pickerIdx    int   // selected row index in the status/priority picker
-	err          error // last storage error, shown in status bar when non-nil
+	pickerIdx    int       // selected row index in the status/priority/vault picker
+	lastSync     time.Time // UTC time of last successful full reload, used for incremental polling
+	err          error     // last storage error, shown in status bar when non-nil
+
+	// token accumulated during remote vault creation (ModeVaultRemote* steps)
+	remoteVaultToken string
+
+	// ID of the task currently being edited (ModeEditing)
+	editingID int64
 }
 
-// New constructs a Model bound to the given DB and vault config.
-func New(db *sql.DB, vc *vault.Config, dataDir string) Model {
+// New constructs a Model bound to the given backend and vault config.
+func New(backend storage.Backend, vc *vault.Config, dataDir string) Model {
 	ti := textinput.New()
 	ti.CharLimit = 256
-	m := Model{db: db, vault: vc, dataDir: dataDir, input: ti}
+	m := Model{backend: backend, vault: vc, dataDir: dataDir, input: ti}
 	m.reload()
 	return m
 }
 
 // Run launches the bubbletea program.
-func Run(db *sql.DB, vc *vault.Config, dataDir string) error {
-	p := tea.NewProgram(New(db, vc, dataDir), tea.WithAltScreen(), tea.WithMouseCellMotion())
+func Run(backend storage.Backend, vc *vault.Config, dataDir string) error {
+	p := tea.NewProgram(New(backend, vc, dataDir), tea.WithAltScreen(), tea.WithMouseCellMotion())
 	_, err := p.Run()
 	return err
 }
 
 type tickMsg time.Time
 
-func tickCmd() tea.Cmd {
+func (m Model) tickCmd() tea.Cmd {
 	return tea.Tick(5*time.Second, func(t time.Time) tea.Msg {
 		return tickMsg(t)
 	})
 }
 
-func (m Model) Init() tea.Cmd { return tickCmd() }
+func (m Model) Init() tea.Cmd { return m.tickCmd() }

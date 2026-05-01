@@ -8,21 +8,21 @@
 package cli
 
 import (
-	"database/sql"
 	"fmt"
 	"io"
 	"os"
 	"sort"
 	"strings"
 
+	"clist/internal/storage"
 	"clist/internal/vault"
 )
 
 // Context is passed to every command's Run function. It bundles shared
-// dependencies (DB handle, output streams) so commands stay decoupled
+// dependencies (backend, output streams) so commands stay decoupled
 // from globals and easy to test.
 type Context struct {
-	DB      *sql.DB
+	Backend storage.Backend
 	Vault   *vault.Config
 	DataDir string
 	Stdout  io.Writer

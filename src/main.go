@@ -35,17 +35,17 @@ func main() {
 		cli.ExitOnError(err)
 	}
 
-	db, err := storage.OpenAt(av.Path)
+	backend, err := storage.NewBackend(av.IsRemote(), av.Path, av.Token)
 	if err != nil {
 		cli.ExitOnError(err)
 	}
-	defer db.Close()
+	defer backend.Close()
 
 	registry := cli.New()
 	registry.RegisterAll(commands.All())
 
 	ctx := &cli.Context{
-		DB:      db,
+		Backend: backend,
 		Vault:   vc,
 		DataDir: dataDir,
 		Stdout:  os.Stdout,
@@ -53,7 +53,7 @@ func main() {
 	}
 
 	defaultRun := func(_ *cli.Context, _ []string) error {
-		return tui.Run(db, vc, dataDir)
+		return tui.Run(backend, vc, dataDir)
 	}
 
 	if err := registry.Dispatch(ctx, os.Args[1:], defaultRun); err != nil {

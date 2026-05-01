@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"clist/internal/cli"
-	"clist/internal/storage"
 	"clist/internal/task"
 )
 
@@ -17,7 +16,7 @@ var statsCmd = &cli.Command{
 }
 
 func runStats(ctx *cli.Context, args []string) error {
-	tasks, err := storage.AllTasks(ctx.DB)
+	tasks, err := ctx.Backend.AllTasks()
 	if err != nil {
 		return fmt.Errorf("stats: %w", err)
 	}

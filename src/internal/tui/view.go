@@ -20,7 +20,8 @@ func (m Model) View() string {
 	if m.mode == ModePickStatus || m.mode == ModePickPriority {
 		return m.renderPicker()
 	}
-	if m.mode == ModePickVault || m.mode == ModeVaultAdd || m.mode == ModeVaultConfirmRemove {
+	if m.mode == ModePickVault || m.mode == ModeVaultAdd || m.mode == ModeVaultConfirmRemove ||
+		m.mode == ModeVaultRemoteToken || m.mode == ModeVaultRemoteName {
 		return m.renderVaultPicker()
 	}
 	return m.renderMain()
@@ -145,6 +146,9 @@ func (m Model) renderMainContent(w, h int) string {
 	if m.mode == ModeAdding {
 		inputSection = m.renderAddInput(inner)
 		inputH = 4
+	} else if m.mode == ModeEditing {
+		inputSection = m.renderEditInput(inner)
+		inputH = 4
 	}
 
 	listH := max(h-2-statusH-inputH, 2)
@@ -171,7 +175,7 @@ func (m Model) renderTopStatus(maxW int) string {
 		return "🔍 " + m.input.View()
 	}
 	if m.err != nil {
-		return lipgloss.NewStyle().Foreground(colRed).Render(truncateEllipsis("DB error: "+m.err.Error(), maxW))
+		return lipgloss.NewStyle().Foreground(colRed).Render(truncateEllipsis("Error: "+m.err.Error(), maxW))
 	}
 	if m.search != "" {
 		return lipgloss.NewStyle().Foreground(colCyan).Render(truncateEllipsis("Filter: "+m.search, maxW))
@@ -186,6 +190,14 @@ func (m Model) renderAddInput(w int) string {
 	prompt := lipgloss.NewStyle().Foreground(colCyan).Render("Add task (GTD syntax):")
 	inputBox := lipgloss.NewStyle().
 		Border(lipgloss.NormalBorder()).BorderForeground(colCyan).
+		Width(w - 2).Render(m.input.View())
+	return lipgloss.JoinVertical(lipgloss.Left, prompt, inputBox)
+}
+
+func (m Model) renderEditInput(w int) string {
+	prompt := lipgloss.NewStyle().Foreground(colYellow).Render("Edit task (GTD syntax):")
+	inputBox := lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder()).BorderForeground(colYellow).
 		Width(w - 2).Render(m.input.View())
 	return lipgloss.JoinVertical(lipgloss.Left, prompt, inputBox)
 }

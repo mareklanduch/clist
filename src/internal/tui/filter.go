@@ -3,26 +3,83 @@ package tui
 import (
 	"sort"
 	"strings"
+	"time"
 
 	"clist/internal/storage"
 	"clist/internal/task"
 )
 
 func (m *Model) reload() {
-	tasks, err := storage.AllTasks(m.db)
+	syncTime := time.Now().UTC()
+	tasks, err := m.backend.AllTasks()
 	if err != nil {
 		m.err = err
 		return
 	}
 	m.err = nil
 	m.tasks = tasks
+	m.lastSync = syncTime
 
-	if stats, err := storage.CompletionStats(m.db); err == nil {
+	if stats, err := m.backend.CompletionStats(); err == nil {
 		m.stats = stats
 	}
 
 	m.counts = m.computeCounts()
 	m.applyFilter()
+}
+
+// pollUpdates does an incremental refresh for remote backends: fetches only
+// tasks changed since lastSync and merges them into the in-memory task list.
+// Falls back to a full reload for local backends.
+func (m *Model) pollUpdates() {
+	rb, ok := m.backend.(*storage.RemoteBackend)
+	if !ok {
+		m.reload()
+		return
+	}
+
+	syncTime := time.Now().UTC()
+	updated, err := rb.TasksSince(m.lastSync)
+	if err != nil {
+		m.err = err
+		return
+	}
+	m.err = nil
+
+	if len(updated) > 0 {
+		byID := make(map[int64]int, len(m.tasks))
+		for i, t := range m.tasks {
+			byID[t.ID] = i
+		}
+		for _, t := range updated {
+			if i, exists := byID[t.ID]; exists {
+				m.tasks[i] = t
+			} else {
+				m.tasks = append(m.tasks, t)
+			}
+		}
+		m.stats = m.statsFromTasks()
+		m.counts = m.computeCounts()
+		m.applyFilter()
+	}
+
+	m.lastSync = syncTime
+}
+
+func (m *Model) statsFromTasks() []storage.DayStat {
+	sevenDaysAgo := time.Now().AddDate(0, 0, -6)
+	counts := make(map[string]int)
+	for _, t := range m.tasks {
+		if t.Status == task.StatusDone && t.CompletedAt != nil && !t.CompletedAt.Before(sevenDaysAgo) {
+			counts[t.CompletedAt.Format("2006-01-02")]++
+		}
+	}
+	stats := make([]storage.DayStat, 7)
+	for i := range 7 {
+		day := sevenDaysAgo.AddDate(0, 0, i)
+		stats[i] = storage.DayStat{Date: day, Count: counts[day.Format("2006-01-02")]}
+	}
+	return stats
 }
 
 // computeCounts tallies view badge counts in a single pass over all tasks.

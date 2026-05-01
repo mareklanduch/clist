@@ -11,25 +11,30 @@ import (
 var vaultCmd = &cli.Command{
 	Name:    "vault",
 	Aliases: []string{"vaults"},
-	Summary: "Manage vaults (separate task databases)",
-	Usage:   "clist vault <list|add|switch|remove> [name]",
-	Long: `Vaults are separate task databases. Each vault stores an independent set of tasks.
+	Summary: "Manage vaults (local databases and remote clist-server vaults)",
+	Usage:   "clist vault <list|add|switch|remove|remote-new|remote-connect> [args]",
+	Long: `Vaults are separate task stores. Local vaults are SQLite files; remote vaults
+sync with a clist-server instance via an access token.
 
 Subcommands:
-  list              list all vaults (* marks the active one)
-  add <name>        create a new vault
-  switch <name>     switch the active vault
-  remove <name>     remove a vault from the registry (db file is kept)
+  list                              list all vaults (* marks the active one)
+  add <name>                        create a new local vault
+  switch <name>                     switch the active vault
+  remove <name>                     remove a vault from the registry (db file kept)
+  remote-new <name>           generate a new vault on the clist-server
+  remote-connect <name> <token>  connect to an existing remote vault by token
 
 Examples:
   clist vault list
   clist vault add work
   clist vault switch work
-  clist vault remove work`,
+  clist vault remove work
+  clist vault remote-new home
+  clist vault remote-connect team X7kQm2pL9nRvTwYz`,
 	Run: runVault,
 }
 
-const vaultUsage = "clist vault <list|add|switch|remove> [name]"
+const vaultUsage = "clist vault <list|add|switch|remove|remote-new|remote-connect> [args]"
 
 func vaultUsageError(ctx *cli.Context, format string, a ...any) error {
 	fmt.Fprintf(ctx.Stderr, "clist vault: "+format+"\nusage: "+vaultUsage+"\n", a...)
@@ -50,6 +55,10 @@ func runVault(ctx *cli.Context, args []string) error {
 		return runVaultSwitch(ctx, rest)
 	case "remove", "rm", "delete", "del":
 		return runVaultRemove(ctx, rest)
+	case "remote-new", "rn":
+		return runVaultRemoteNew(ctx, rest)
+	case "remote-connect", "rc":
+		return runVaultRemoteConnect(ctx, rest)
 	default:
 		return vaultUsageError(ctx, "unknown subcommand %q", sub)
 	}
@@ -67,8 +76,12 @@ func runVaultList(ctx *cli.Context) error {
 		if v.Name == vc.Active {
 			marker = "* "
 		}
-		count, _ := vaultTaskCount(v.Path)
-		fmt.Fprintf(ctx.Stdout, "%s%-20s  %s  (%d tasks)\n", marker, v.Name, v.Path, count)
+		if v.IsRemote() {
+			fmt.Fprintf(ctx.Stdout, "%s%-20s  remote  [%s]\n", marker, v.Name, v.Token)
+		} else {
+			count, _ := vaultTaskCount(v.Path)
+			fmt.Fprintf(ctx.Stdout, "%s%-20s  %s  (%d tasks)\n", marker, v.Name, v.Path, count)
+		}
 	}
 	return nil
 }
@@ -113,7 +126,36 @@ func runVaultRemove(ctx *cli.Context, args []string) error {
 	return nil
 }
 
-// vaultTaskCount opens the vault db briefly to count active tasks.
+func runVaultRemoteNew(ctx *cli.Context, args []string) error {
+	if len(args) < 1 {
+		return vaultUsageError(ctx, "remote-new requires: <name>")
+	}
+	name := args[0]
+	fmt.Fprintln(ctx.Stdout, "Creating vault on clist-server…")
+	token, err := storage.CreateRemoteVault()
+	if err != nil {
+		return fmt.Errorf("create remote vault: %w", err)
+	}
+	if err := ctx.Vault.AddRemoteVault(name, token); err != nil {
+		return err
+	}
+	fmt.Fprintf(ctx.Stdout, "Remote vault %q created.\nToken: %s\nStore this token — it is the only way to access your vault.\n", name, token)
+	return nil
+}
+
+func runVaultRemoteConnect(ctx *cli.Context, args []string) error {
+	if len(args) < 2 {
+		return vaultUsageError(ctx, "remote-connect requires: <name> <token>")
+	}
+	name, token := args[0], args[1]
+	if err := ctx.Vault.AddRemoteVault(name, token); err != nil {
+		return err
+	}
+	fmt.Fprintf(ctx.Stdout, "Remote vault %q connected.\n", name)
+	return nil
+}
+
+// vaultTaskCount opens a local vault db briefly to count active tasks.
 func vaultTaskCount(dbPath string) (int, error) {
 	db, err := storage.OpenAt(dbPath)
 	if err != nil {

@@ -5,7 +5,6 @@ import (
 	"strconv"
 
 	"clist/internal/cli"
-	"clist/internal/storage"
 	"clist/internal/task"
 )
 
@@ -26,7 +25,7 @@ func runDone(ctx *cli.Context, args []string) error {
 	if err != nil {
 		return cli.UsageErrorf(ctx, doneCmd, "invalid id %q", args[0])
 	}
-	if err := storage.UpdateStatus(ctx.DB, id, task.StatusDone); err != nil {
+	if err := ctx.Backend.UpdateStatus(id, task.StatusDone); err != nil {
 		return fmt.Errorf("done: %w", err)
 	}
 	fmt.Fprintf(ctx.Stdout, "Marked #%d as done\n", id)

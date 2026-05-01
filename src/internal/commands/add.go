@@ -40,7 +40,7 @@ func runAdd(ctx *cli.Context, args []string) error {
 		return cli.UsageErrorf(ctx, addCmd, "task title is empty")
 	}
 
-	db := ctx.DB
+	backend := ctx.Backend
 	targetVault := ctx.Vault.Active
 
 	if vaultName != "" {
@@ -49,12 +49,12 @@ func runAdd(ctx *cli.Context, args []string) error {
 			return fmt.Errorf("vault %q not found (use `clist vault list` to see available vaults)", vaultName)
 		}
 		if vaultName != ctx.Vault.Active {
-			altDB, err := storage.OpenAt(v.Path)
+			altBackend, err := storage.NewBackend(v.IsRemote(), v.Path, v.Token)
 			if err != nil {
 				return fmt.Errorf("open vault %q: %w", vaultName, err)
 			}
-			defer altDB.Close()
-			db = altDB
+			defer altBackend.Close()
+			backend = altBackend
 		}
 		targetVault = vaultName
 	}
@@ -66,7 +66,7 @@ func runAdd(ctx *cli.Context, args []string) error {
 		DueDate:   dueDate,
 		CreatedAt: time.Now(),
 	}
-	if err := storage.AddTask(db, t); err != nil {
+	if err := backend.AddTask(t); err != nil {
 		return fmt.Errorf("add task: %w", err)
 	}
 

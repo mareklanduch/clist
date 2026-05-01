@@ -5,7 +5,6 @@ import (
 	"strconv"
 
 	"clist/internal/cli"
-	"clist/internal/storage"
 )
 
 var deleteCmd = &cli.Command{
@@ -25,7 +24,7 @@ func runDelete(ctx *cli.Context, args []string) error {
 	if err != nil {
 		return cli.UsageErrorf(ctx, deleteCmd, "invalid id %q", args[0])
 	}
-	if err := storage.DeleteTask(ctx.DB, id); err != nil {
+	if err := ctx.Backend.DeleteTask(id); err != nil {
 		return fmt.Errorf("delete: %w", err)
 	}
 	fmt.Fprintf(ctx.Stdout, "Deleted #%d\n", id)

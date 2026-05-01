@@ -18,14 +18,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 	case tickMsg:
-		m.reload()
-		return m, tickCmd()
+		m.pollUpdates()
+		return m, m.tickCmd()
 	case tea.KeyMsg:
 		switch m.mode {
 		case ModeNormal:
 			return m.updateNormal(msg)
 		case ModeAdding:
 			return m.updateAdding(msg)
+		case ModeEditing:
+			return m.updateEditing(msg)
 		case ModeSearching:
 			return m.updateSearching(msg)
 		case ModeConfirmDelete:
@@ -40,6 +42,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateVaultAdd(msg)
 		case ModeVaultConfirmRemove:
 			return m.updateVaultConfirmRemove(msg)
+		case ModeVaultRemoteToken:
+			return m.updateVaultRemoteToken(msg)
+		case ModeVaultRemoteName:
+			return m.updateVaultRemoteName(msg)
 		}
 	}
 	return m, nil
@@ -103,8 +109,18 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "e":
 		if len(m.filtered) > 0 && m.selected < len(m.filtered) {
 			t := m.filtered[m.selected]
+			m.editingID = t.ID
+			m.mode = ModeEditing
+			m.input.Placeholder = "Buy milk #groceries !high due:today"
+			m.input.SetValue(t.ToInputString())
+			m.input.CursorEnd()
+			m.input.Focus()
+		}
+	case "A":
+		if len(m.filtered) > 0 && m.selected < len(m.filtered) {
+			t := m.filtered[m.selected]
 			newArchived := !t.Archived
-			if err := storage.UpdateArchived(m.db, t.ID, newArchived); err != nil {
+			if err := m.backend.UpdateArchived(t.ID, newArchived); err != nil {
 				m.status = fmt.Sprintf("Error: %v", err)
 			} else {
 				if newArchived {
@@ -128,7 +144,7 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			} else {
 				newStatus = task.StatusDone
 			}
-			if err := storage.UpdateStatus(m.db, t.ID, newStatus); err != nil {
+			if err := m.backend.UpdateStatus(t.ID, newStatus); err != nil {
 				m.status = fmt.Sprintf("Error: %v", err)
 			} else {
 				if newStatus == task.StatusDone {
@@ -189,14 +205,14 @@ func (m Model) updateAdding(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					DueDate:   dueDate,
 					CreatedAt: time.Now(),
 				}
-				db := m.db
+				backend := m.backend
 				targetVault := m.vault.Active
 				openedAlt := false
 				if vaultName != "" {
 					if v := m.vault.Get(vaultName); v != nil {
 						if vaultName != m.vault.Active {
-							if altDB, err := storage.OpenAt(v.Path); err == nil {
-								db = altDB
+							if altBackend, err := storage.NewBackend(v.IsRemote(), v.Path, v.Token); err == nil {
+								backend = altBackend
 								openedAlt = true
 							}
 						}
@@ -208,7 +224,7 @@ func (m Model) updateAdding(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 						return m, nil
 					}
 				}
-				if err := storage.AddTask(db, t); err != nil {
+				if err := backend.AddTask(t); err != nil {
 					m.status = fmt.Sprintf("Error: %v", err)
 				} else if targetVault != m.vault.Active {
 					m.status = fmt.Sprintf("Added to [%s]: %s", targetVault, title)
@@ -217,7 +233,41 @@ func (m Model) updateAdding(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					m.reload()
 				}
 				if openedAlt {
-					_ = db.Close()
+					_ = backend.Close()
+				}
+			}
+		}
+		m.mode = ModeNormal
+		m.input.Blur()
+	case "esc":
+		m.mode = ModeNormal
+		m.input.Blur()
+	default:
+		var cmd tea.Cmd
+		m.input, cmd = m.input.Update(msg)
+		return m, cmd
+	}
+	return m, nil
+}
+
+func (m Model) updateEditing(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "enter":
+		val := strings.TrimSpace(m.input.Value())
+		if val != "" {
+			title, tags, priority, dueDate, _ := task.ParseInput(val)
+			if title != "" {
+				t := task.Task{
+					Title:    title,
+					Tags:     tags,
+					Priority: priority,
+					DueDate:  dueDate,
+				}
+				if err := m.backend.UpdateTask(m.editingID, t); err != nil {
+					m.status = fmt.Sprintf("Error: %v", err)
+				} else {
+					m.status = "Updated: " + title
+					m.reload()
 				}
 			}
 		}
@@ -261,7 +311,7 @@ func (m Model) updateConfirmDelete(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "y", "enter":
 		if len(m.filtered) > 0 && m.selected < len(m.filtered) {
 			t := m.filtered[m.selected]
-			if err := storage.DeleteTask(m.db, t.ID); err != nil {
+			if err := m.backend.DeleteTask(t.ID); err != nil {
 				m.status = fmt.Sprintf("Error: %v", err)
 			} else {
 				m.status = "Deleted: " + t.Title
@@ -302,7 +352,7 @@ func (m Model) updatePickStatus(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m Model) applyPickStatus() (tea.Model, tea.Cmd) {
 	if len(m.filtered) > 0 && m.selected < len(m.filtered) {
 		t := m.filtered[m.selected]
-		if err := storage.UpdateStatus(m.db, t.ID, pickerStatuses[m.pickerIdx]); err != nil {
+		if err := m.backend.UpdateStatus(t.ID, pickerStatuses[m.pickerIdx]); err != nil {
 			m.status = fmt.Sprintf("Error: %v", err)
 		} else {
 			m.reload()
@@ -339,7 +389,7 @@ func (m Model) updatePickPriority(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m Model) applyPickPriority() (tea.Model, tea.Cmd) {
 	if len(m.filtered) > 0 && m.selected < len(m.filtered) {
 		t := m.filtered[m.selected]
-		if err := storage.UpdatePriority(m.db, t.ID, pickerPriorities[m.pickerIdx]); err != nil {
+		if err := m.backend.UpdatePriority(t.ID, pickerPriorities[m.pickerIdx]); err != nil {
 			m.status = fmt.Sprintf("Error: %v", err)
 		} else {
 			m.reload()
@@ -378,6 +428,12 @@ func (m Model) updatePickVault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.input.SetValue("")
 		m.input.Focus()
 		m.mode = ModeVaultAdd
+	case "r":
+		m.remoteVaultToken = ""
+		m.input.Placeholder = "leave blank to generate a new token"
+		m.input.SetValue("")
+		m.input.Focus()
+		m.mode = ModeVaultRemoteToken
 	case "d":
 		if len(vaults) > 0 {
 			m.mode = ModeVaultConfirmRemove
@@ -400,7 +456,7 @@ func (m Model) applyPickVault() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	newDB, err := storage.OpenAt(chosen.Path)
+	newBackend, err := storage.NewBackend(chosen.IsRemote(), chosen.Path, chosen.Token)
 	if err != nil {
 		m.status = fmt.Sprintf("Error opening vault: %v", err)
 		m.mode = ModeNormal
@@ -408,14 +464,14 @@ func (m Model) applyPickVault() (tea.Model, tea.Cmd) {
 	}
 
 	if err := m.vault.Switch(chosen.Name); err != nil {
-		_ = newDB.Close()
+		_ = newBackend.Close()
 		m.status = fmt.Sprintf("Error switching vault: %v", err)
 		m.mode = ModeNormal
 		return m, nil
 	}
 
-	_ = m.db.Close()
-	m.db = newDB
+	_ = m.backend.Close()
+	m.backend = newBackend
 	m.status = fmt.Sprintf("Switched to vault %q", chosen.Name)
 	m.selected = 0
 	m.scrollOffset = 0
@@ -435,7 +491,6 @@ func (m Model) updateVaultAdd(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.status = fmt.Sprintf("Error: %v", err)
 			} else {
 				m.status = fmt.Sprintf("Vault %q created", name)
-				// position picker on the new vault
 				for i, v := range m.vault.Vaults {
 					if v.Name == strings.ToLower(name) {
 						m.pickerIdx = i
@@ -468,12 +523,13 @@ func (m Model) updateVaultConfirmRemove(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			} else {
 				m.status = fmt.Sprintf("Vault %q removed", name)
 				if activeChanged {
-					newDB, err := storage.OpenAt(m.vault.ActiveVault().Path)
+					av := m.vault.ActiveVault()
+					newBackend, err := storage.NewBackend(av.IsRemote(), av.Path, av.Token)
 					if err != nil {
 						m.status = fmt.Sprintf("Error opening vault: %v", err)
 					} else {
-						_ = m.db.Close()
-						m.db = newDB
+						_ = m.backend.Close()
+						m.backend = newBackend
 						m.selected = 0
 						m.scrollOffset = 0
 						m.search = ""
@@ -488,6 +544,73 @@ func (m Model) updateVaultConfirmRemove(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.mode = ModePickVault
 	case "n", "esc":
 		m.mode = ModePickVault
+	}
+	return m, nil
+}
+
+// --- remote vault creation steps ---
+
+func (m Model) updateVaultRemoteToken(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "enter":
+		token := strings.TrimSpace(m.input.Value())
+		m.input.Blur()
+		if token == "" {
+			t, err := storage.CreateRemoteVault()
+			if err != nil {
+				m.status = fmt.Sprintf("Error: %v", err)
+				m.mode = ModePickVault
+				return m, nil
+			}
+			m.remoteVaultToken = t
+		} else {
+			m.remoteVaultToken = token
+		}
+		m.input.Placeholder = "vault name, e.g. work"
+		m.input.SetValue("")
+		m.input.Focus()
+		m.mode = ModeVaultRemoteName
+	case "esc":
+		m.input.Blur()
+		m.mode = ModePickVault
+	default:
+		var cmd tea.Cmd
+		m.input, cmd = m.input.Update(msg)
+		return m, cmd
+	}
+	return m, nil
+}
+
+func (m Model) updateVaultRemoteName(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "enter":
+		name := strings.TrimSpace(m.input.Value())
+		m.input.Blur()
+		if name != "" {
+			if err := m.vault.AddRemoteVault(name, m.remoteVaultToken); err != nil {
+				m.status = fmt.Sprintf("Error: %v", err)
+			} else {
+				short := m.remoteVaultToken
+				if len(short) > 8 {
+					short = short[:8] + "…"
+				}
+				m.status = fmt.Sprintf("Remote vault %q added (token: %s)", name, short)
+				for i, v := range m.vault.Vaults {
+					if v.Name == strings.ToLower(name) {
+						m.pickerIdx = i
+						break
+					}
+				}
+			}
+		}
+		m.mode = ModePickVault
+	case "esc":
+		m.input.Blur()
+		m.mode = ModePickVault
+	default:
+		var cmd tea.Cmd
+		m.input, cmd = m.input.Update(msg)
+		return m, cmd
 	}
 	return m, nil
 }

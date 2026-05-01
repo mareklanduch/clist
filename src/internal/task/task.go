@@ -291,6 +291,22 @@ func ParseInput(s string) (title string, tags []string, priority Priority, dueDa
 	return
 }
 
+// ToInputString serializes the task back to the GTD add-syntax string so it can
+// be pre-filled in the edit input box.
+func (t Task) ToInputString() string {
+	parts := []string{t.Title}
+	for _, tag := range t.Tags {
+		parts = append(parts, "#"+tag)
+	}
+	if t.Priority != PriorityMedium {
+		parts = append(parts, "!"+PriorityToStr(t.Priority))
+	}
+	if t.DueDate != nil {
+		parts = append(parts, "due:"+t.DueDate.Format("2006-01-02"))
+	}
+	return strings.Join(parts, " ")
+}
+
 // parseDueDate accepts: YYYY-MM-DD, today, Nd / -Nd (days), Nm / -Nm (months).
 func parseDueDate(s string) *time.Time {
 	now := time.Now()

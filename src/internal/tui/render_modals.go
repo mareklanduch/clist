@@ -42,8 +42,9 @@ func (m Model) renderHelp() string {
 	all = append(all, "")
 	all = append(all, title.Render("Task Actions"))
 	all = append(all, "  "+k.Render("a")+"              "+d.Render("Add new task"))
+	all = append(all, "  "+k.Render("e")+"              "+d.Render("Edit task (opens in input box)"))
 	all = append(all, "  "+k.Render("Space")+"          "+d.Render("Toggle done"))
-	all = append(all, "  "+k.Render("e")+"              "+d.Render("Archive / unarchive"))
+	all = append(all, "  "+k.Render("A")+"              "+d.Render("Archive / unarchive"))
 	all = append(all, "  "+k.Render("d / Delete")+"     "+d.Render("Delete task"))
 	all = append(all, "  "+k.Render("p")+"              "+d.Render("Cycle priority"))
 	all = append(all, "  "+k.Render("s")+"              "+d.Render("Cycle status"))
@@ -103,7 +104,7 @@ func (m Model) renderHelp() string {
 	header := title.Render("Keyboard Shortcuts") + "\n\n"
 	modal := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).BorderForeground(colCyan).
-		Padding(1, 2).Width(modalW).Height(boxH-2).
+		Padding(1, 2).Width(modalW).Height(boxH - 2).
 		Render(header + strings.Join(parts, "\n"))
 
 	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, modal)
@@ -119,21 +120,25 @@ func (m Model) renderVaultPicker() string {
 		if v.Name == m.vault.Active {
 			marker = "● "
 		}
+		typeTag := ""
+		if v.IsRemote() {
+			typeTag = dim.Render(" [remote:" + v.Token + "]")
+		}
 		row := fmt.Sprintf("  %s%-18s", marker, v.Name)
 		switch {
 		case i == m.pickerIdx:
-			rows = append(rows, lipgloss.NewStyle().Background(colBlue).Foreground(colWhite).Bold(true).Render(row+" ◀"))
+			rows = append(rows, lipgloss.NewStyle().Background(colBlue).Foreground(colWhite).Bold(true).Render(row+" ◀")+typeTag)
 		case v.Name == m.vault.Active:
-			rows = append(rows, lipgloss.NewStyle().Foreground(colCyan).Render(row))
+			rows = append(rows, lipgloss.NewStyle().Foreground(colCyan).Render(row)+typeTag)
 		default:
-			rows = append(rows, lipgloss.NewStyle().Foreground(colWhite).Render(row))
+			rows = append(rows, lipgloss.NewStyle().Foreground(colWhite).Render(row)+typeTag)
 		}
 	}
 
 	var bottom string
 	switch m.mode {
 	case ModeVaultAdd:
-		prompt := lipgloss.NewStyle().Foreground(colCyan).Render("  New vault name:")
+		prompt := lipgloss.NewStyle().Foreground(colCyan).Render("  New local vault name:")
 		inputBox := lipgloss.NewStyle().
 			Border(lipgloss.NormalBorder()).BorderForeground(colCyan).
 			Width(24).Render(m.input.View())
@@ -149,8 +154,28 @@ func (m Model) renderVaultPicker() string {
 		hint := dim.Render("  y/Enter: yes  ·  n/Esc: cancel")
 		bottom = "\n" + warn + "\n" + hint
 
+	case ModeVaultRemoteToken:
+		prompt := lipgloss.NewStyle().Foreground(colCyan).Render("  Token (blank = generate new):")
+		inputBox := lipgloss.NewStyle().
+			Border(lipgloss.NormalBorder()).BorderForeground(colCyan).
+			Width(36).Render(m.input.View())
+		hint := dim.Render("  Enter: confirm  ·  Esc: cancel")
+		bottom = "\n" + prompt + "\n" + inputBox + "\n" + hint
+
+	case ModeVaultRemoteName:
+		short := m.remoteVaultToken
+		if len(short) > 8 {
+			short = short[:8] + "…"
+		}
+		prompt := lipgloss.NewStyle().Foreground(colCyan).Render(fmt.Sprintf("  Name for token %s:", short))
+		inputBox := lipgloss.NewStyle().
+			Border(lipgloss.NormalBorder()).BorderForeground(colCyan).
+			Width(24).Render(m.input.View())
+		hint := dim.Render("  Enter: save  ·  Esc: cancel")
+		bottom = "\n" + prompt + "\n" + inputBox + "\n" + hint
+
 	default:
-		hint := dim.Render("  Enter/s: switch  ·  a: add  ·  d: remove  ·  Esc: close")
+		hint := dim.Render("  Enter/s: switch  ·  a: local  ·  r: remote  ·  d: remove  ·  Esc: close")
 		bottom = "\n" + hint
 	}
 
