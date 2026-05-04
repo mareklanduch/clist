@@ -47,11 +47,12 @@ var (
 	pickerPriorities = []task.Priority{task.PriorityCritical, task.PriorityHigh, task.PriorityMedium, task.PriorityLow}
 )
 
-const statsBanner = ` ██████╗ ██╗     ██╗███████╗ ████████╗
-██╔════╝ ██║     ██║██╔════╝ ╚══██╔══╝
+const statsBanner = `
+██████╗  ██╗     ██╗███████╗ ████████╗
+██╔═══╝  ██║     ██║██╔════╝ ╚══██╔══╝
 ██║      ██║     ██║███████╗    ██║
-██║      ██║     ██║╚════██╗    ██║
-╚██████╗ ███████╗██║███████╔╝   ██║
+██║      ██║     ██║╚════██║    ██║
+╚██████╗ ███████╗██║███████║    ██║
  ╚═════╝ ╚══════╝╚═╝╚══════╝    ╚═╝   `
 
 // Model is the bubbletea application state.
