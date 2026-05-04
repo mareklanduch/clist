@@ -28,17 +28,16 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: src/go.mod
+          go-version-file: go.mod
 
       - name: Build
-        working-directory: src
         run: go build -o ${{ matrix.binary }} -ldflags="-s -w" .
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.asset_name }}
-          path: src/${{ matrix.binary }}
+          path: ${{ matrix.binary }}
 
   release:
     name: Create Release
