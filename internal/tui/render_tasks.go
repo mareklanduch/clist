@@ -72,7 +72,7 @@ func (m Model) renderTaskLines(t task.Task, w int) []string {
 	// Visible-char layout: prioIcon(2) + " " + statIcon(3) + " " = 7 chars.
 	const iconW = 7
 
-	// Measure raw suffix (tags + due) to reserve space on the first line only.
+	// Measure raw suffix (tags + due) to check if it fits on the last wrapped line.
 	var rawParts []string
 	for _, tag := range t.Tags {
 		rawParts = append(rawParts, " #"+tag)
@@ -85,10 +85,14 @@ func (m Model) renderTaskLines(t task.Task, w int) []string {
 		suffixLen += len(p)
 	}
 
-	// First line: narrowed to fit suffix. Continuation lines: full width.
-	firstW := max(w-iconW-suffixLen, 8)
+	// All lines wrap at the same width; suffix goes at the end of the last one.
 	contW := max(w-iconW, 8)
-	segs := wrapTwoWidth(t.Title, firstW, contW)
+	segs := wrapTwoWidth(t.Title, contW, contW)
+	// If the last segment plus the suffix overflows, add a blank segment so the
+	// suffix lands on its own indented line.
+	if suffixLen > 0 && len([]rune(segs[len(segs)-1]))+suffixLen > contW {
+		segs = append(segs, "")
+	}
 
 	// Priority icon
 	prioIcon := lipgloss.NewStyle().Foreground(priorityColor(t.Priority)).Render(t.PriorityIcon())
@@ -154,10 +158,14 @@ func (m Model) renderTaskLines(t task.Task, w int) []string {
 	var result []string
 	for i, seg := range segs {
 		styled := titleSt.Render(seg)
+		suffix := ""
+		if i == len(segs)-1 {
+			suffix = tagsStr + dueStr
+		}
 		if i == 0 {
-			result = append(result, prioIcon+" "+statIcon+" "+styled+tagsStr+dueStr)
+			result = append(result, prioIcon+" "+statIcon+" "+styled+suffix)
 		} else {
-			result = append(result, indent+styled)
+			result = append(result, indent+styled+suffix)
 		}
 	}
 	return result
