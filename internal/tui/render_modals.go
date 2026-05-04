@@ -18,12 +18,19 @@ func (m Model) renderDeleteModal() string {
 		}
 	}
 
-	content := fmt.Sprintf("\n  Delete: \"%s\"?\n\n  y/Enter: Yes        n/Esc: Cancel\n", title)
+	const w = 54
+	center := func(s string) string {
+		return lipgloss.NewStyle().Width(w).Align(lipgloss.Center).Render(s)
+	}
+
+	heading := lipgloss.NewStyle().Foreground(colRed).Bold(true).Render("Delete Task")
+	body := fmt.Sprintf(`Delete: "%s"?`, title)
+	hint := lipgloss.NewStyle().Foreground(colGray).Render("y/Enter: Yes  ·  n/Esc: Cancel")
 
 	modal := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).BorderForeground(colRed).
-		Padding(0, 2).Width(54).
-		Render(lipgloss.NewStyle().Foreground(colRed).Bold(true).Render("Delete Task") + "\n" + content)
+		Padding(1, 2).Width(w).
+		Render(center(heading) + "\n\n" + center(body) + "\n\n" + center(hint))
 
 	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, modal)
 }
@@ -114,69 +121,93 @@ func (m Model) renderVaultPicker() string {
 	vaults := m.vault.Vaults
 	dim := lipgloss.NewStyle().Foreground(colGray)
 
+	const w = 50
+	// PlaceHorizontal avoids nested Width constraints that corrupt ANSI-coded strings.
+	center := func(s string) string {
+		return lipgloss.PlaceHorizontal(w, lipgloss.Center, s)
+	}
+	inputW := w - 2
+
 	var rows []string
 	for i, v := range vaults {
 		marker := "  "
 		if v.Name == m.vault.Active {
 			marker = "● "
 		}
-		typeTag := ""
-		if v.IsRemote() {
-			typeTag = dim.Render(" [remote:" + v.Token + "]")
+		isSelected := i == m.pickerIdx
+
+		name := v.Name
+		if len(name) > 20 {
+			name = name[:19] + "…"
 		}
-		row := fmt.Sprintf("  %s%-18s", marker, v.Name)
+		nameLine := fmt.Sprintf("  %s%s", marker, name)
+
 		switch {
-		case i == m.pickerIdx:
-			rows = append(rows, lipgloss.NewStyle().Background(colBlue).Foreground(colWhite).Bold(true).Render(row+" ◀")+typeTag)
+		case isSelected:
+			rows = append(rows, lipgloss.NewStyle().Background(lipgloss.Color("236")).Foreground(colWhite).Width(w).Render(nameLine))
 		case v.Name == m.vault.Active:
-			rows = append(rows, lipgloss.NewStyle().Foreground(colCyan).Render(row)+typeTag)
+			rows = append(rows, lipgloss.NewStyle().Foreground(colCyan).Render(nameLine))
 		default:
-			rows = append(rows, lipgloss.NewStyle().Foreground(colWhite).Render(row)+typeTag)
+			rows = append(rows, lipgloss.NewStyle().Foreground(colWhite).Render(nameLine))
+		}
+
+		if v.IsRemote() {
+			token := v.Token
+			if len(token) > w-11 { // len("    token: ") == 11
+				token = token[:w-12] + "…"
+			}
+			tokenLine := "    token: " + token
+			if isSelected {
+				rows = append(rows, lipgloss.NewStyle().Background(lipgloss.Color("236")).Foreground(colGray).Width(w).Render(tokenLine))
+			} else {
+				rows = append(rows, dim.Render(tokenLine))
+			}
 		}
 	}
 
 	var bottom string
 	switch m.mode {
 	case ModeVaultAdd:
-		prompt := lipgloss.NewStyle().Foreground(colCyan).Render("  New local vault name:")
+		prompt := lipgloss.NewStyle().Foreground(colCyan).Render("New local vault name:")
 		inputBox := lipgloss.NewStyle().
 			Border(lipgloss.NormalBorder()).BorderForeground(colCyan).
-			Width(24).Render(m.input.View())
-		hint := dim.Render("  Enter: create  ·  Esc: cancel")
-		bottom = "\n" + prompt + "\n" + inputBox + "\n" + hint
+			Width(inputW).Render(m.input.View())
+		hint := dim.Render("Enter: create  ·  Esc: cancel")
+		bottom = "\n" + center(prompt) + "\n" + inputBox + "\n" + center(hint)
 
 	case ModeVaultConfirmRemove:
 		name := ""
 		if m.pickerIdx < len(vaults) {
 			name = vaults[m.pickerIdx].Name
 		}
-		warn := lipgloss.NewStyle().Foreground(colRed).Bold(true).Render(fmt.Sprintf("  Remove %q?", name))
-		hint := dim.Render("  y/Enter: yes  ·  n/Esc: cancel")
-		bottom = "\n" + warn + "\n" + hint
+		warn := lipgloss.NewStyle().Foreground(colRed).Bold(true).Render(fmt.Sprintf("Remove %q?", name))
+		hint := dim.Render("y/Enter: yes  ·  n/Esc: cancel")
+		bottom = "\n" + center(warn) + "\n" + center(hint)
 
 	case ModeVaultRemoteToken:
-		prompt := lipgloss.NewStyle().Foreground(colCyan).Render("  Token (blank = generate new):")
+		prompt := lipgloss.NewStyle().Foreground(colCyan).Render("Token (blank = generate new):")
 		inputBox := lipgloss.NewStyle().
 			Border(lipgloss.NormalBorder()).BorderForeground(colCyan).
-			Width(36).Render(m.input.View())
-		hint := dim.Render("  Enter: confirm  ·  Esc: cancel")
-		bottom = "\n" + prompt + "\n" + inputBox + "\n" + hint
+			Width(inputW).Render(m.input.View())
+		hint := dim.Render("Enter: confirm  ·  Esc: cancel")
+		bottom = "\n" + center(prompt) + "\n" + inputBox + "\n" + center(hint)
 
 	case ModeVaultRemoteName:
 		short := m.remoteVaultToken
 		if len(short) > 8 {
 			short = short[:8] + "…"
 		}
-		prompt := lipgloss.NewStyle().Foreground(colCyan).Render(fmt.Sprintf("  Name for token %s:", short))
+		prompt := lipgloss.NewStyle().Foreground(colCyan).Render(fmt.Sprintf("Name for token %s:", short))
 		inputBox := lipgloss.NewStyle().
 			Border(lipgloss.NormalBorder()).BorderForeground(colCyan).
-			Width(24).Render(m.input.View())
-		hint := dim.Render("  Enter: save  ·  Esc: cancel")
-		bottom = "\n" + prompt + "\n" + inputBox + "\n" + hint
+			Width(inputW).Render(m.input.View())
+		hint := dim.Render("Enter: save  ·  Esc: cancel")
+		bottom = "\n" + center(prompt) + "\n" + inputBox + "\n" + center(hint)
 
 	default:
-		hint := dim.Render("  Enter/s: switch  ·  a: local  ·  r: remote  ·  d: remove  ·  Esc: close")
-		bottom = "\n" + hint
+		hint1 := dim.Render("Enter/s: switch  ·  a: local  ·  r: remote")
+		hint2 := dim.Render("d: remove  ·  Esc: close")
+		bottom = "\n" + center(hint1) + "\n" + center(hint2)
 	}
 
 	titleLine := lipgloss.NewStyle().Foreground(colCyan).Bold(true).Render("Vaults")
@@ -185,7 +216,7 @@ func (m Model) renderVaultPicker() string {
 	modal := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).BorderForeground(colCyan).
 		Padding(0, 2).
-		Render(titleLine + content)
+		Render(center(titleLine) + content)
 
 	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, modal)
 }
@@ -220,14 +251,20 @@ func (m Model) renderPicker() string {
 		}
 	}
 
-	hint := lipgloss.NewStyle().Foreground(colGray).Render("  j/k navigate  ·  Enter confirm  ·  1-N instant pick  ·  Esc cancel")
-	content := "\n" + strings.Join(rows, "\n") + "\n\n" + hint
+	const w = 40
+	center := func(s string) string {
+		return lipgloss.NewStyle().Width(w).Align(lipgloss.Center).Render(s)
+	}
 
+	hint1 := lipgloss.NewStyle().Foreground(colGray).Render("j/k navigate  ·  Enter confirm")
+	hint2 := lipgloss.NewStyle().Foreground(colGray).Render("1-N instant pick  ·  Esc cancel")
 	titleLine := lipgloss.NewStyle().Foreground(colCyan).Bold(true).Render(titleStr)
+	content := "\n" + strings.Join(rows, "\n") + "\n\n" + center(hint1) + "\n" + center(hint2)
+
 	modal := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).BorderForeground(colCyan).
-		Padding(0, 2).
-		Render(titleLine + content)
+		Padding(0, 2).Width(w).
+		Render(center(titleLine) + content)
 
 	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, modal)
 }
