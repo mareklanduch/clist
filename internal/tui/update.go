@@ -267,7 +267,15 @@ func (m Model) updateEditing(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					m.status = fmt.Sprintf("Error: %v", err)
 				} else {
 					m.status = "Updated: " + title
+					editedID := m.editingID
 					m.reload()
+					for i, ft := range m.filtered {
+						if ft.ID == editedID {
+							m.selected = i
+							m.ensureVisible()
+							break
+						}
+					}
 				}
 			}
 		}

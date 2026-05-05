@@ -162,14 +162,19 @@ func (r *RemoteBackend) UpdateArchived(id int64, archived bool) error {
 }
 
 func (r *RemoteBackend) UpdateTask(id int64, t task.Task) error {
+	tags := t.Tags
+	if tags == nil {
+		tags = []string{}
+	}
 	body := map[string]any{
 		"title":    t.Title,
 		"priority": task.PriorityToStr(t.Priority),
-		"tags":     t.Tags,
-		"dueDate":  nil,
+		"tags":     tags,
 	}
 	if t.DueDate != nil {
 		body["dueDate"] = t.DueDate.Format("2006-01-02")
+	} else {
+		body["clearDueDate"] = true
 	}
 	return r.patch(id, body)
 }
