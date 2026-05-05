@@ -12,6 +12,14 @@ import (
 	"clist/internal/vault"
 )
 
+type animTickMsg time.Time
+
+func (m Model) animTickCmd() tea.Cmd {
+	return tea.Tick(80*time.Millisecond, func(t time.Time) tea.Msg {
+		return animTickMsg(t)
+	})
+}
+
 // AppView identifies the active tab.
 type AppView int
 
@@ -78,6 +86,7 @@ type Model struct {
 	pickerIdx    int       // selected row index in the status/priority/vault picker
 	lastSync     time.Time // UTC time of last successful full reload, used for incremental polling
 	err          error     // last storage error, shown in status bar when non-nil
+	animFrame    int       // incremented by animTickCmd for animations
 
 	// token accumulated during remote vault creation (ModeVaultRemote* steps)
 	remoteVaultToken string
@@ -110,4 +119,4 @@ func (m Model) tickCmd() tea.Cmd {
 	})
 }
 
-func (m Model) Init() tea.Cmd { return m.tickCmd() }
+func (m Model) Init() tea.Cmd { return tea.Batch(m.tickCmd(), m.animTickCmd()) }

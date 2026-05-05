@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/cursor"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"clist/internal/storage"
@@ -20,6 +21,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tickMsg:
 		m.pollUpdates()
 		return m, m.tickCmd()
+	case animTickMsg:
+		m.animFrame++
+		return m, m.animTickCmd()
+	case cursor.BlinkMsg:
+		var cmd tea.Cmd
+		m.input, cmd = m.input.Update(msg)
+		return m, cmd
 	case tea.KeyMsg:
 		switch m.mode {
 		case ModeNormal:
@@ -105,7 +113,7 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.mode = ModeAdding
 		m.input.Placeholder = "Buy milk #groceries !high due:today @work"
 		m.input.SetValue("")
-		m.input.Focus()
+		return m, m.input.Focus()
 	case "e":
 		if len(m.filtered) > 0 && m.selected < len(m.filtered) {
 			t := m.filtered[m.selected]
@@ -114,7 +122,7 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.input.Placeholder = "Buy milk #groceries !high due:today"
 			m.input.SetValue(t.ToInputString())
 			m.input.CursorEnd()
-			m.input.Focus()
+			return m, m.input.Focus()
 		}
 	case "A":
 		if len(m.filtered) > 0 && m.selected < len(m.filtered) {
@@ -181,7 +189,7 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.mode = ModeSearching
 		m.input.Placeholder = "Search tasks..."
 		m.input.SetValue("")
-		m.input.Focus()
+		return m, m.input.Focus()
 	case "v":
 		if m.vault != nil {
 			m.openVaultPicker()
@@ -434,14 +442,14 @@ func (m Model) updatePickVault(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "a":
 		m.input.Placeholder = "work, personal, …"
 		m.input.SetValue("")
-		m.input.Focus()
 		m.mode = ModeVaultAdd
+		return m, m.input.Focus()
 	case "r":
 		m.remoteVaultToken = ""
 		m.input.Placeholder = "leave blank to generate a new token"
 		m.input.SetValue("")
-		m.input.Focus()
 		m.mode = ModeVaultRemoteToken
+		return m, m.input.Focus()
 	case "d":
 		if len(vaults) > 0 {
 			m.mode = ModeVaultConfirmRemove
@@ -576,8 +584,8 @@ func (m Model) updateVaultRemoteToken(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.input.Placeholder = "vault name, e.g. work"
 		m.input.SetValue("")
-		m.input.Focus()
 		m.mode = ModeVaultRemoteName
+		return m, m.input.Focus()
 	case "esc":
 		m.input.Blur()
 		m.mode = ModePickVault

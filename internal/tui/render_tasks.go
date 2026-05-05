@@ -38,7 +38,13 @@ func (m Model) renderTaskList(w, h int) string {
 		for j, ln := range taskLns {
 			prefix := "  "
 			if j == 0 && selected {
-				prefix = "▶ "
+				inputActive := m.mode == ModeAdding || m.mode == ModeEditing ||
+					m.mode == ModeSearching
+				if inputActive || (m.animFrame/6)%2 == 0 {
+					prefix = "▶ "
+				} else {
+					prefix = "▷ "
+				}
 			}
 			var line string
 			if selected {
