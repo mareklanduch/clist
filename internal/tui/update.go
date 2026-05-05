@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/atotto/clipboard"
 	"github.com/charmbracelet/bubbles/cursor"
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -184,6 +185,26 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				}
 			}
 			m.mode = ModePickStatus
+		}
+	case "y", "ctrl+y":
+		if len(m.filtered) > 0 && m.selected < len(m.filtered) {
+			t := m.filtered[m.selected]
+			var text string
+			if msg.String() == "ctrl+y" {
+				text = t.ToInputString()
+			} else {
+				parts := make([]string, 0, 1+len(t.Tags))
+				parts = append(parts, t.Title)
+				for _, tag := range t.Tags {
+					parts = append(parts, "#"+tag)
+				}
+				text = strings.Join(parts, " ")
+			}
+			if err := clipboard.WriteAll(text); err == nil {
+				m.status = "Copied: " + text
+			} else {
+				m.status = "Clipboard unavailable"
+			}
 		}
 	case "/":
 		m.mode = ModeSearching

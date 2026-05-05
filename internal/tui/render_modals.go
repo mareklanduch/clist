@@ -55,6 +55,8 @@ func (m Model) renderHelp() string {
 	all = append(all, "  "+k.Render("d / Delete")+"     "+d.Render("Delete task"))
 	all = append(all, "  "+k.Render("p")+"              "+d.Render("Cycle priority"))
 	all = append(all, "  "+k.Render("s")+"              "+d.Render("Cycle status"))
+	all = append(all, "  "+k.Render("y")+"              "+d.Render("Copy title to clipboard"))
+	all = append(all, "  "+k.Render("Ctrl+Y")+"         "+d.Render("Copy full task (title + tags + priority + due)"))
 	all = append(all, "")
 	all = append(all, title.Render("Search"))
 	all = append(all, "  "+k.Render("/")+"              "+d.Render("Enter search mode"))
