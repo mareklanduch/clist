@@ -221,14 +221,15 @@ func UpdateArchived(db *sql.DB, id int64, archived bool) error {
 
 // UpdateTask updates the title, tags, priority, and due date of a task.
 func UpdateTask(db *sql.DB, id int64, t task.Task) error {
-	var dueDateStr *string
+	// Use explicit interface{} nil so the driver stores SQL NULL unambiguously
+	// when there is no due date (a typed nil *string is sometimes mishandled).
+	var dueDate interface{}
 	if t.DueDate != nil {
-		s := t.DueDate.Format("2006-01-02")
-		dueDateStr = &s
+		dueDate = t.DueDate.Format("2006-01-02")
 	}
 	tagsStr := strings.Join(t.Tags, ",")
 	_, err := db.Exec(`UPDATE tasks SET title = ?, priority = ?, due_date = ?, tags = ? WHERE id = ?`,
-		t.Title, task.PriorityToStr(t.Priority), dueDateStr, tagsStr, id)
+		t.Title, task.PriorityToStr(t.Priority), dueDate, tagsStr, id)
 	if err != nil {
 		return fmt.Errorf("failed to update task: %w", err)
 	}

@@ -224,7 +224,7 @@ func (m *Model) ensureVisible() {
 		lineCount := 0
 		visible := false
 		for i := m.scrollOffset; i < len(m.filtered); i++ {
-			lc := len(m.renderTaskLines(m.filtered[i], listW))
+			lc := len(m.renderTaskLines(m.filtered[i], listW, ""))
 			if lineCount+lc > effective {
 				break
 			}

@@ -26,11 +26,15 @@ func (m Model) renderTaskList(w, h int) string {
 	capacity := h - 1
 	endIdx := m.scrollOffset
 	for i := m.scrollOffset; i < len(m.filtered); i++ {
-		taskLns := m.renderTaskLines(m.filtered[i], w-2)
+		selected := i == m.selected
+		selBg := lipgloss.Color("")
+		if selected {
+			selBg = lipgloss.Color("236")
+		}
+		taskLns := m.renderTaskLines(m.filtered[i], w-2, selBg)
 		if len(lines)+len(taskLns) > capacity {
 			break
 		}
-		selected := i == m.selected
 		for j, ln := range taskLns {
 			prefix := "  "
 			if j == 0 && selected {
@@ -38,10 +42,8 @@ func (m Model) renderTaskList(w, h int) string {
 			}
 			var line string
 			if selected {
-				// Width(w) fills the whole line with background so the selection stripe
-				// is visible even when inner ANSI resets clear the background mid-content.
 				line = lipgloss.NewStyle().
-					Background(lipgloss.Color("236")).Width(w).
+					Background(selBg).Width(w).
 					Render(prefix + ln)
 			} else {
 				line = clip.Render(prefix + ln)
@@ -68,8 +70,21 @@ func (m Model) renderTaskList(w, h int) string {
 
 // renderTaskLines renders one task as 1+ wrapped lines.
 // w is the available width before the 2-char "▶ "/"  " prefix added by the caller.
-func (m Model) renderTaskLines(t task.Task, w int) []string {
-	// Visible-char layout: prioIcon(2) + " " + statIcon(3) + " " = 7 chars.
+// selBg, when non-empty, is applied to every inner style so the selection highlight
+// is not broken by inner ANSI resets (\033[0m).
+func (m Model) renderTaskLines(t task.Task, w int, selBg lipgloss.Color) []string {
+	withBg := func(s lipgloss.Style) lipgloss.Style {
+		if selBg != "" {
+			return s.Background(selBg)
+		}
+		return s
+	}
+	sp := " "
+	if selBg != "" {
+		sp = lipgloss.NewStyle().Background(selBg).Render(" ")
+	}
+
+	// Visible-char layout: prioIcon(2) + sp + statIcon(3) + sp = 7 chars.
 	const iconW = 7
 
 	// Measure raw suffix (tags + due) to check if it fits on the last wrapped line.
@@ -95,7 +110,7 @@ func (m Model) renderTaskLines(t task.Task, w int) []string {
 	}
 
 	// Priority icon
-	prioIcon := lipgloss.NewStyle().Foreground(priorityColor(t.Priority)).Render(t.PriorityIcon())
+	prioIcon := withBg(lipgloss.NewStyle().Foreground(priorityColor(t.Priority))).Render(t.PriorityIcon())
 
 	// Status icon color
 	var sCol lipgloss.Color
@@ -109,31 +124,31 @@ func (m Model) renderTaskLines(t task.Task, w int) []string {
 	default:
 		sCol = colWhite
 	}
-	statIcon := lipgloss.NewStyle().Foreground(sCol).Render(t.StatusIcon())
+	statIcon := withBg(lipgloss.NewStyle().Foreground(sCol)).Render(t.StatusIcon())
 
 	// Title style
 	var titleSt lipgloss.Style
 	switch {
 	case t.Status == task.StatusDone:
-		titleSt = lipgloss.NewStyle().Foreground(colGray).Strikethrough(true)
+		titleSt = withBg(lipgloss.NewStyle().Foreground(colGray).Strikethrough(true))
 	case t.Archived:
-		titleSt = lipgloss.NewStyle().Foreground(colGray)
+		titleSt = withBg(lipgloss.NewStyle().Foreground(colGray))
 	case t.IsOverdue():
-		titleSt = lipgloss.NewStyle().Foreground(colRed).Bold(true)
+		titleSt = withBg(lipgloss.NewStyle().Foreground(colRed).Bold(true))
 	case t.IsDueToday():
-		titleSt = lipgloss.NewStyle().Foreground(colCyan)
+		titleSt = withBg(lipgloss.NewStyle().Foreground(colLightRed))
 	default:
-		titleSt = lipgloss.NewStyle().Foreground(colWhite)
+		titleSt = withBg(lipgloss.NewStyle().Foreground(colWhite))
 	}
 
 	// Styled tags
 	var tagParts []string
 	for _, tag := range t.Tags {
-		tagParts = append(tagParts, lipgloss.NewStyle().Foreground(colCyan).Render("#"+tag))
+		tagParts = append(tagParts, withBg(lipgloss.NewStyle().Foreground(colCyan)).Render("#"+tag))
 	}
 	tagsStr := ""
 	if len(tagParts) > 0 {
-		tagsStr = " " + strings.Join(tagParts, " ")
+		tagsStr = sp + strings.Join(tagParts, sp)
 	}
 
 	// Styled due date
@@ -143,18 +158,18 @@ func (m Model) renderTaskLines(t task.Task, w int) []string {
 		var dueSt lipgloss.Style
 		switch {
 		case t.IsOverdue():
-			dueSt = lipgloss.NewStyle().Foreground(colRed).Bold(true)
+			dueSt = withBg(lipgloss.NewStyle().Foreground(colRed).Bold(true))
 		case t.IsDueToday():
-			dueSt = lipgloss.NewStyle().Foreground(colCyan).Bold(true)
+			dueSt = withBg(lipgloss.NewStyle().Foreground(colCyan).Bold(true))
 		case days <= 3:
-			dueSt = lipgloss.NewStyle().Foreground(colYellow)
+			dueSt = withBg(lipgloss.NewStyle().Foreground(colYellow))
 		default:
-			dueSt = lipgloss.NewStyle().Foreground(colGray)
+			dueSt = withBg(lipgloss.NewStyle().Foreground(colGray))
 		}
-		dueStr = " " + dueSt.Render(t.DueDaysStr())
+		dueStr = sp + dueSt.Render(t.DueDaysStr())
 	}
 
-	indent := strings.Repeat(" ", iconW)
+	indent := withBg(lipgloss.NewStyle()).Render(strings.Repeat(" ", iconW))
 	var result []string
 	for i, seg := range segs {
 		styled := titleSt.Render(seg)
@@ -163,7 +178,7 @@ func (m Model) renderTaskLines(t task.Task, w int) []string {
 			suffix = tagsStr + dueStr
 		}
 		if i == 0 {
-			result = append(result, prioIcon+" "+statIcon+" "+styled+suffix)
+			result = append(result, prioIcon+sp+statIcon+sp+styled+suffix)
 		} else {
 			result = append(result, indent+styled+suffix)
 		}
