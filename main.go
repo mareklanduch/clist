@@ -10,6 +10,7 @@
 package main
 
 import (
+	"errors"
 	"os"
 
 	"clist/internal/cli"
@@ -32,7 +33,7 @@ func main() {
 
 	av := vc.ActiveVault()
 	if av == nil {
-		cli.ExitOnError(err)
+		cli.ExitOnError(errors.New("no vaults configured (vaults.json is empty)"))
 	}
 
 	backend, err := storage.NewBackend(av.IsRemote(), av.Path, av.Token)

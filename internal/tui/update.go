@@ -11,7 +11,6 @@ import (
 
 	"clist/internal/storage"
 	"clist/internal/task"
-	"clist/internal/vault"
 )
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -77,9 +76,9 @@ func (m Model) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "h", "?":
 		m.showHelp = !m.showHelp
 	case "tab":
-		m.switchView((m.view + 1) % 6)
+		m.switchView((m.view + 1) % viewCount)
 	case "shift+tab":
-		m.switchView((m.view + 5) % 6)
+		m.switchView((m.view + viewCount - 1) % viewCount)
 	case "1":
 		m.switchView(ViewAll)
 	case "2":
@@ -651,9 +650,6 @@ func (m Model) updateVaultRemoteName(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	return m, nil
 }
-
-// ensure vault package is used
-var _ = vault.Config{}
 
 func (m Model) updateHelp(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {

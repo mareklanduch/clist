@@ -85,7 +85,6 @@ func (t Task) StatusIcon() string {
 		return "[~]"
 	case StatusSomeday:
 		return "[?]"
-
 	default:
 		return "[ ]"
 	}
@@ -104,7 +103,6 @@ func (t Task) StatusLabel() string {
 		return "Waiting"
 	case StatusSomeday:
 		return "Someday"
-
 	default:
 		return "Todo"
 	}
@@ -159,34 +157,6 @@ func (t Task) DueDaysStr() string {
 	}
 }
 
-// NextPriority cycles to the next priority.
-func NextPriority(p Priority) Priority {
-	switch p {
-	case PriorityLow:
-		return PriorityMedium
-	case PriorityMedium:
-		return PriorityHigh
-	case PriorityHigh:
-		return PriorityCritical
-	default:
-		return PriorityLow
-	}
-}
-
-// NextStatus cycles through active statuses (excludes Done and Archived — use space/e to toggle those).
-func NextStatus(s Status) Status {
-	switch s {
-	case StatusTodo:
-		return StatusInProgress
-	case StatusInProgress:
-		return StatusWaiting
-	case StatusWaiting:
-		return StatusSomeday
-	default:
-		return StatusTodo
-	}
-}
-
 // PriorityFromStr converts a string to a Priority.
 func PriorityFromStr(s string) Priority {
 	switch strings.ToLower(s) {
@@ -226,7 +196,6 @@ func StatusFromStr(s string) Status {
 		return StatusWaiting
 	case "someday":
 		return StatusSomeday
-
 	default:
 		return StatusTodo
 	}
@@ -243,7 +212,6 @@ func StatusToStr(s Status) string {
 		return "waiting"
 	case StatusSomeday:
 		return "someday"
-
 	default:
 		return "todo"
 	}

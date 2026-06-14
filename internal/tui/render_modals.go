@@ -12,10 +12,7 @@ import (
 func (m Model) renderDeleteModal() string {
 	title := ""
 	if len(m.filtered) > 0 && m.selected < len(m.filtered) {
-		title = m.filtered[m.selected].Title
-		if len(title) > 40 {
-			title = title[:37] + "..."
-		}
+		title = truncateEllipsis(m.filtered[m.selected].Title, 40)
 	}
 
 	const w = 54
@@ -53,8 +50,8 @@ func (m Model) renderHelp() string {
 	all = append(all, "  "+k.Render("Space")+"          "+d.Render("Toggle done"))
 	all = append(all, "  "+k.Render("A")+"              "+d.Render("Archive / unarchive"))
 	all = append(all, "  "+k.Render("d / Delete")+"     "+d.Render("Delete task"))
-	all = append(all, "  "+k.Render("p")+"              "+d.Render("Cycle priority"))
-	all = append(all, "  "+k.Render("s")+"              "+d.Render("Cycle status"))
+	all = append(all, "  "+k.Render("p")+"              "+d.Render("Set priority"))
+	all = append(all, "  "+k.Render("s")+"              "+d.Render("Set status"))
 	all = append(all, "  "+k.Render("y")+"              "+d.Render("Copy title to clipboard"))
 	all = append(all, "  "+k.Render("Ctrl+Y")+"         "+d.Render("Copy full task (title + tags + priority + due)"))
 	all = append(all, "")
@@ -138,11 +135,7 @@ func (m Model) renderVaultPicker() string {
 		}
 		isSelected := i == m.pickerIdx
 
-		name := v.Name
-		if len(name) > 20 {
-			name = name[:19] + "…"
-		}
-		nameLine := fmt.Sprintf("  %s%s", marker, name)
+		nameLine := fmt.Sprintf("  %s%s", marker, truncateEllipsis(v.Name, 20))
 
 		switch {
 		case isSelected:

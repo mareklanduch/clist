@@ -49,7 +49,7 @@ func (m Model) renderTaskList(w, h int) string {
 			var line string
 			if selected {
 				line = lipgloss.NewStyle().
-					Background(selBg).Width(w).
+					Background(selBg).Width(w).MaxWidth(w).
 					Render(prefix + ln)
 			} else {
 				line = clip.Render(prefix + ln)
@@ -94,21 +94,17 @@ func (m Model) renderTaskLines(t task.Task, w int, selBg lipgloss.Color) []strin
 	const iconW = 7
 
 	// Measure raw suffix (tags + due) to check if it fits on the last wrapped line.
-	var rawParts []string
+	suffixLen := 0
 	for _, tag := range t.Tags {
-		rawParts = append(rawParts, " #"+tag)
+		suffixLen += len([]rune(tag)) + 2 // " #tag"
 	}
 	if t.DueDate != nil {
-		rawParts = append(rawParts, " "+t.DueDaysStr())
-	}
-	suffixLen := 0
-	for _, p := range rawParts {
-		suffixLen += len(p)
+		suffixLen += len([]rune(t.DueDaysStr())) + 1
 	}
 
 	// All lines wrap at the same width; suffix goes at the end of the last one.
 	contW := max(w-iconW, 8)
-	segs := wrapTwoWidth(t.Title, contW, contW)
+	segs := wrap(t.Title, contW)
 	// If the last segment plus the suffix overflows, add a blank segment so the
 	// suffix lands on its own indented line.
 	if suffixLen > 0 && len([]rune(segs[len(segs)-1]))+suffixLen > contW {

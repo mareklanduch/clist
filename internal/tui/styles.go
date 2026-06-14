@@ -13,7 +13,6 @@ var (
 	colGreen    = lipgloss.Color("10")
 	colYellow   = lipgloss.Color("11")
 	colRed      = lipgloss.Color("9")
-	colMagenta  = lipgloss.Color("13")
 	colGray     = lipgloss.Color("8")
 	colWhite    = lipgloss.Color("15")
 	colBlue     = lipgloss.Color("12")

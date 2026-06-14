@@ -27,29 +27,43 @@ func truncateEllipsis(s string, maxW int) string {
 	return string(r[:maxW-3]) + "..."
 }
 
-// wrapTwoWidth wraps text so the first segment fits firstW and all subsequent
-// segments fit contW. Calling with firstW==contW is equivalent to plain word-wrap.
-func wrapTwoWidth(text string, firstW, contW int) []string {
+// wrap word-wraps text so every segment fits within w runes. Words longer
+// than w are hard-broken so no segment can exceed the width.
+func wrap(text string, w int) []string {
+	if w < 1 {
+		w = 1
+	}
 	words := strings.Fields(text)
 	if len(words) == 0 {
 		return []string{""}
 	}
 	var segs []string
-	var cur strings.Builder
-	limit := firstW
+	var cur []rune
+	flush := func() {
+		segs = append(segs, string(cur))
+		cur = cur[:0]
+	}
 	for _, word := range words {
-		if cur.Len() == 0 {
-			cur.WriteString(word)
-		} else if cur.Len()+1+len(word) <= limit {
-			cur.WriteByte(' ')
-			cur.WriteString(word)
-		} else {
-			segs = append(segs, cur.String())
-			cur.Reset()
-			cur.WriteString(word)
-			limit = contW
+		r := []rune(word)
+		// Hard-break words that can never fit on one line.
+		for len(r) > w {
+			if len(cur) > 0 {
+				flush()
+			}
+			segs = append(segs, string(r[:w]))
+			r = r[w:]
+		}
+		switch {
+		case len(cur) == 0:
+			cur = append(cur, r...)
+		case len(cur)+1+len(r) <= w:
+			cur = append(cur, ' ')
+			cur = append(cur, r...)
+		default:
+			flush()
+			cur = append(cur, r...)
 		}
 	}
-	segs = append(segs, cur.String())
+	flush()
 	return segs
 }

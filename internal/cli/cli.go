@@ -8,6 +8,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -161,10 +162,9 @@ type silentError struct{}
 func (silentError) Error() string { return "" }
 
 // IsSilent reports whether err was produced via UsageErrorf and
-// already printed.
+// already printed. Wrapped errors are unwrapped.
 func IsSilent(err error) bool {
-	_, ok := err.(silentError)
-	return ok
+	return errors.Is(err, ErrSilent)
 }
 
 // ExitOnError prints err (unless silent) and exits with code 1.

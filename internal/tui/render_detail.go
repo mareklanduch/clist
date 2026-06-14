@@ -19,7 +19,7 @@ func (m Model) renderDetail(w, h int) string {
 
 	var lines []string
 	lines = append(lines, lipgloss.NewStyle().Bold(true).Foreground(colWhite).
-		Render(strings.Join(wrapTwoWidth(t.Title, innerW, innerW), "\n")))
+		Render(strings.Join(wrap(t.Title, innerW), "\n")))
 	lines = append(lines, "")
 
 	prioStr := t.PriorityIcon() + " " + t.PriorityLabel()
@@ -52,7 +52,7 @@ func (m Model) renderDetail(w, h int) string {
 	if t.Notes != "" {
 		lines = append(lines, "")
 		lines = append(lines, lipgloss.NewStyle().Foreground(colGray).Render("Notes:"))
-		lines = append(lines, strings.Join(wrapTwoWidth(t.Notes, innerW, innerW), "\n"))
+		lines = append(lines, strings.Join(wrap(t.Notes, innerW), "\n"))
 	}
 
 	lines = append(lines, "")

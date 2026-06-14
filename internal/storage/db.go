@@ -37,6 +37,7 @@ func OpenAt(path string) (*sql.DB, error) {
 	}
 
 	if _, err := db.Exec(`PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;`); err != nil {
+		db.Close()
 		return nil, fmt.Errorf("failed to set pragmas: %w", err)
 	}
 
@@ -53,12 +54,14 @@ func OpenAt(path string) (*sql.DB, error) {
 		notes TEXT DEFAULT '',
 		archived INTEGER NOT NULL DEFAULT 0
 	)`); err != nil {
+		db.Close()
 		return nil, fmt.Errorf("failed to create tasks table: %w", err)
 	}
 
 	// Migration: add archived column to existing databases.
 	if _, err := db.Exec(`ALTER TABLE tasks ADD COLUMN archived INTEGER NOT NULL DEFAULT 0`); err != nil {
 		if !strings.Contains(err.Error(), "duplicate column name") {
+			db.Close()
 			return nil, fmt.Errorf("failed to migrate archived column: %w", err)
 		}
 	}
@@ -221,9 +224,9 @@ func UpdateArchived(db *sql.DB, id int64, archived bool) error {
 
 // UpdateTask updates the title, tags, priority, and due date of a task.
 func UpdateTask(db *sql.DB, id int64, t task.Task) error {
-	// Use explicit interface{} nil so the driver stores SQL NULL unambiguously
+	// Use explicit any nil so the driver stores SQL NULL unambiguously
 	// when there is no due date (a typed nil *string is sometimes mishandled).
-	var dueDate interface{}
+	var dueDate any
 	if t.DueDate != nil {
 		dueDate = t.DueDate.Format("2006-01-02")
 	}
@@ -279,7 +282,7 @@ func CompletionStats(db *sql.DB) ([]DayStat, error) {
 	}
 
 	stats := make([]DayStat, 0, 7)
-	for i := 0; i < 7; i++ {
+	for i := range 7 {
 		day := sevenDaysAgo.AddDate(0, 0, i)
 		stats = append(stats, DayStat{Date: day, Count: rawData[day.Format("2006-01-02")]})
 	}

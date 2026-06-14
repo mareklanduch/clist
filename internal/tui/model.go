@@ -30,6 +30,8 @@ const (
 	ViewSomeday
 	ViewStats
 	ViewArchive
+
+	viewCount // number of views; keep last
 )
 
 // InputMode identifies the current keyboard input context.

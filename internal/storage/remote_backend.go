@@ -211,7 +211,7 @@ func (r *RemoteBackend) CompletionStats() ([]DayStat, error) {
 		}
 	}
 	stats := make([]DayStat, 0, 7)
-	for i := 0; i < 7; i++ {
+	for i := range 7 {
 		day := sevenDaysAgo.AddDate(0, 0, i)
 		stats = append(stats, DayStat{Date: day, Count: rawData[day.Format("2006-01-02")]})
 	}
